@@ -1,6 +1,4 @@
 - name: Docs
   href: docs/
-- name: Internals
-  href: internals/
 - name: API
   href: api/
