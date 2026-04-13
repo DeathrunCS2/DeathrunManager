@@ -12,8 +12,6 @@ env:
   CONFIGURATION: Release
 
 on:
-  push:
-    if: startsWith(github.event.head_commit.message, 'push module')
   workflow_dispatch:
 
 jobs:
