@@ -33,14 +33,13 @@
     ],
     "output": "_site",
     "template": [
-      "default",
       "modern"
     ],
     "globalMetadata": {
-      "_appName": "",
-      "_appTitle": "",
+      "_appName": "CS2DeathrunManager",
+      "_appTitle": "DeathrunManager",
       "_enableSearch": true,
-      "pdf": true
+      "pdf": false
     }
   }
 }
