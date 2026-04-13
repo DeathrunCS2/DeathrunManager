@@ -4,10 +4,11 @@
     {
       "src": [
         {
+          "src": "../src/DeathrunManager.Shared/",
           "files": [
-            "../src/DeathrunManager.Shared/*.csproj"
-          ],
-          "src": "../src/DeathrunManager.Shared/DeathrunManager.Shared.csproj"
+            "*.csproj",
+            "*.cs"
+          ]
         }
       ],
       "dest": "api"
