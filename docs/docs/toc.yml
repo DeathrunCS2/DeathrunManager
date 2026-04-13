@@ -6,5 +6,8 @@
   href: configuration.md
 - name: Commands
   href: commands.md
+
 - name: Example Modules
-  href: examples/
+  items:
+  - href: examples/basic.md
+  # - href: step-1.md
