@@ -122,9 +122,9 @@ jobs:
       - name: Build changelog
         id: changelog
         run: |
-          MINOR_VERSION="${{ steps.build_version.outputs.minor_version }}"
+          MINOR_VERSION=${{ steps.build_version.outputs.minor_version }}
           
-          if [ "MINOR_VERSION" -gt 0 ]; then
+          if [ "$MINOR_VERSION" -gt 0 ]; then
             echo "body=Changelog: https://github.com/aquevadis/ms-cs2deathrun-public/compare/${{ steps.changelog_starting_point.outputs.full }}...${{ steps.build_version.outputs.version }}build${{ github.run_number }}" >> $GITHUB_OUTPUT
           else
             echo "body=" >> $GITHUB_OUTPUT
