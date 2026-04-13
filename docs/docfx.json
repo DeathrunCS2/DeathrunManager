@@ -4,14 +4,25 @@
     {
       "src": [
         {
-          "src": "../src",
           "files": [
-            "**/*.csproj"
+            "../src/DeathrunManager.Shared/*.csproj"
           ]
         }
       ],
       "dest": "api"
+    },
+    {
+      "src": [
+        {
+          "src": "../src",
+          "files": [
+            "../src/DeathrunManager/*.csproj",
+          ]
+        }
+      ],
+      "dest": "module-internals"
     }
+
   ],
   "build": {
     "content": [
