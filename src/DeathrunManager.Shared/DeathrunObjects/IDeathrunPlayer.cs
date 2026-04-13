@@ -85,7 +85,9 @@ public interface IDeathrunPlayer
     /// If set to true, the player will be skipped for the upcoming selection and the value will reset to false afterward.
     /// </summary>
     bool SkipNextGameMasterPickUp { get; set; }
-    
+
+    bool RenderDeathrunHud { get; }
+
     #endregion
     
     #region Change Class Method

@@ -1,6 +1,6 @@
 using Sharp.Modules.AdminManager.Shared;
 
-namespace DeathrunManager.Shared.DeathrunObjects;
+namespace DeathrunManager.Shared;
 
 public interface IDeathrunModule
 {

@@ -49,6 +49,7 @@ public class DeathrunPlayer : IDeathrunPlayer
     public bool IsValidAndAlive => IsValid is true && PlayerPawn?.IsAlive is true;
     public bool SkipNextGameMasterPickUp { get; set; } = false;
     public bool IsThinking { get; private set; } = true;
+    public bool RenderDeathrunHud { get; private set; } = false;
     
     #endregion
     
@@ -295,6 +296,8 @@ public class DeathrunPlayer : IDeathrunPlayer
             || Client.IsHltv is true) return;
         
         if (IsValid is not true) return;
+        
+        if (RenderDeathrunHud is not true) return;
         
         var e = DeathrunManager.Bridge.EventManager.CreateEvent("show_survival_respawn_status", true);
         if (e is null) return;

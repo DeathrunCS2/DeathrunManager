@@ -26,6 +26,10 @@
         </AssemblyAttribute>
     </ItemGroup>
     
+    <ItemGroup>
+      <PackageReference Include="ModSharp.Sharp.Modules.MenuManager.Shared" Version="2.1.118" />
+    </ItemGroup>
+    
     <Target Name="CopyCompiledOutputs" AfterTargets="Build">
         <ItemGroup>
             <CompiledFiles Include="$(TargetDir)*.dll" />
