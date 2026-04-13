@@ -11,7 +11,7 @@ env:
   DOTNET_VERSION: '10.0.x'
   CONFIGURATION: Release
 
-on:  
+on:
   workflow_dispatch:
 
 jobs:
@@ -19,18 +19,27 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      contents: write
-      packages: write
-
+      contents: write  # Required for creating releases
+      packages: write  # Required for publishing to GitHub Packages
+    
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 1
-      
-      - name: Check build release criteria
-        if: ${{ contains($(git log -1 --pretty=%B), 'push module v') 
-                || contains($(git log -1 --pretty=%B), 'push module + api v')}}
-        run: exit 1
+
+      - name: Get commit message
+        id: commit
+        run: |
+          COMMIT=$(git log -1 --pretty=%B)
+
+          {
+            echo "commit_message<<EOF"
+            echo "$COMMIT"
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
+          
+          echo "Commit message:"
+          echo "$COMMIT"
       
       # Versioning
       - name: Versioning
@@ -89,7 +98,7 @@ jobs:
 
       # Changelog base (ONLY if minor >= 1)
       - name: Get changelog starting point
-        if: steps.build_version.outputs.minor_version >= 1
+        if: ${{ steps.build_version.outputs.minor_version >= 1 }}
         id: changelog_starting_point
         run: |
           VERSION=${{ steps.build_version.outputs.version }}
@@ -111,7 +120,7 @@ jobs:
       - name: Build changelog
         id: changelog
         run: |
-          if [ "${{ steps.build_version.outputs.minor_version }}" -gt 1 ]; then
+          if [ ${{ steps.build_version.outputs.minor_version }} -gt 1 ]; then
             echo "body=Changelog: https://github.com/aquevadis/ms-cs2deathrun-public/compare/${{ steps.changelog_starting_point.outputs.full }}...${{ steps.build_version.outputs.version }}build${{ github.run_number }}" >> $GITHUB_OUTPUT
           else
             echo "body=" >> $GITHUB_OUTPUT
@@ -119,9 +128,6 @@ jobs:
 
       # Release
       - name: Create GitHub Release
-        if: |
-          startsWith(github.event.head_commit.message, 'push module v') ||
-          startsWith(github.event.head_commit.message, 'push module + api v')
         uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -132,15 +138,16 @@ jobs:
             DeathrunManager${{ steps.build_version.outputs.version }}-build${{ github.run_number }}.tar.gz
             DeathrunManager${{ steps.build_version.outputs.version }}-build${{ github.run_number }}.zip
           body: ${{ steps.changelog.outputs.body }}
-          prerelease: ${{ steps.build_version.outputs.minor_version == 1 }}
+          draft: false
+          prerelease: false
+          make_latest: true
 
       # NuGet
-      - name: Build NuGet
-        run: dotnet pack $SHARED_PROJECT_PATH -c Release -o .build/nuget
-
-      if: startsWith(github.event.head_commit.message, 'push module + api v')            
-      - name: Publish NuGet
-        run: dotnet nuget push .build/nuget/*.nupkg \
-          --skip-duplicate \
-          --api-key ${{ secrets.NUGET_API_KEY }} \
-          --source https://api.nuget.org/v3/index.json
+      - name: Build and publish Nuget package
+        if: ${{ contains(steps.commit.outputs.message, 'push module + api v') }}
+        run: |
+          dotnet pack src/DeathrunManager.Shared/DeathrunManager.Shared.csproj --configuration Release --output .build/nuget
+          dotnet nuget push .build/nuget/DeathrunManager.Shared.${{ steps.build_version.outputs.version }}.nupkg --skip-duplicate --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
+        
+          
+  
