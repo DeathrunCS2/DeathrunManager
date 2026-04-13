@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src\DeathrunManager.Shared\DeathrunManager.Shared.csproj" />
+    <Project Path="src\DeathrunManager\DeathrunManager.csproj" />
+    <File Path="src/Directory.Build.props" />
+  </Folder>
+</Solution>

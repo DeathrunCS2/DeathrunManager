@@ -1,0 +1,41 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <AssemblyName>DeathrunManager.Shared</AssemblyName>
+        <PackageId>DeathrunManager.Shared</PackageId>
+        <RootNamespace>DeathrunManager.Shared</RootNamespace>
+        <BaseOutputPath>../..build/Sharp.Shared/</BaseOutputPath>
+        <PlatformTarget>x64</PlatformTarget>
+    </PropertyGroup>
+    
+    <ItemGroup>
+        <None Include="README.md" Pack="true" PackagePath="\"/>
+    </ItemGroup>
+    
+    <PropertyGroup>
+        <BuildDateTime>$([System.DateTime]::Now.ToString("yyyy-MM-dd HH:mm:ss"))</BuildDateTime>
+    </PropertyGroup>
+    
+    <ItemGroup>
+        <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+            <_Parameter1>BuildTime</_Parameter1>
+            <_Parameter2>$(BuildDateTime)</_Parameter2>
+        </AssemblyAttribute>
+    </ItemGroup>
+    
+    <Target Name="CopyCompiledOutputs" AfterTargets="Build">
+        <ItemGroup>
+            <CompiledFiles Include="$(TargetDir)*.dll" />
+            <CompiledFiles Include="$(TargetDir)*.pdb" />
+            <CompiledFiles Include="$(TargetDir)*.deps.json" />
+        </ItemGroup>
+
+        <Copy
+                SourceFiles="@(CompiledFiles)"
+                DestinationFolder="..\..\.sharp\shared\DeathrunManager.Shared" />
+    </Target>
+
+</Project>

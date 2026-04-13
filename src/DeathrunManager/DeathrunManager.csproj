@@ -1,0 +1,44 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>disable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <AssemblyName>Deathrun.Manager</AssemblyName>
+        <RootNamespace>DeathrunManager</RootNamespace>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <PlatformTarget>x64</PlatformTarget>
+    </PropertyGroup>
+    
+    <PropertyGroup>
+        <BuildDateTime>$([System.DateTime]::Now.ToString("yyyy-MM-dd HH:mm:ss"))</BuildDateTime>
+    </PropertyGroup>
+    
+    <ItemGroup>
+        <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+            <_Parameter1>BuildTime</_Parameter1>
+            <_Parameter2>$(BuildDateTime)</_Parameter2>
+        </AssemblyAttribute>
+    </ItemGroup>
+    
+    <ItemGroup>
+        <PackageReference Include="Dapper" Version="2.1.66" />
+        <PackageReference Include="MySqlConnector" Version="2.5.0" />
+        <PackageReference Include="McMaster.NETCore.Plugins" Version="2.0.0" />
+        <ProjectReference Include="..\DeathrunManager.Shared\DeathrunManager.Shared.csproj" PrivateAssets="all" />
+    </ItemGroup>
+    
+    <Target Name="CopyCompiledOutputs" AfterTargets="Build">
+        <ItemGroup>
+            <CompiledFiles Include="$(TargetDir)Deathrun.Manager.dll" />
+            <CompiledFiles Include="$(TargetDir)Deathrun.Manager.deps.json" />
+            <!--            <CompiledFiles Include="$(TargetDir)Deathrun.Manager.pdb" />-->
+        </ItemGroup>
+
+        <Copy
+                SourceFiles="@(CompiledFiles)"
+                DestinationFolder="..\..\.sharp\modules\Deathrun.Manager" />
+    </Target>
+    
+
+</Project>
