@@ -49,7 +49,7 @@ public class DeathrunPlayer : IDeathrunPlayer
     public bool IsValidAndAlive => IsValid is true && PlayerPawn?.IsAlive is true;
     public bool SkipNextGameMasterPickUp { get; set; } = false;
     public bool IsThinking { get; private set; } = true;
-    public bool RenderDeathrunHud { get; private set; } = false;
+    public bool RenderDeathrunHud { get; private set; } = true;
     
     #endregion
     
