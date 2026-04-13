@@ -4,9 +4,10 @@
     {
       "src": [
         {
-          "src": "../src",
+          "src": "../src/DeathrunManager.Shared/",
           "files": [
-            "**/*.csproj"
+            "*.csproj",
+            "*.cs"
           ]
         }
       ],
