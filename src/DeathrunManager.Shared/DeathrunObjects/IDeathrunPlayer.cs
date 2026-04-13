@@ -86,6 +86,12 @@ public interface IDeathrunPlayer
     /// </summary>
     bool SkipNextGameMasterPickUp { get; set; }
 
+    /// <summary>
+    /// Indicates whether the Deathrun HUD should be rendered for the player.
+    /// This property determines the visibility of the on-screen interface elements
+    /// specific to the Deathrun game mode, such as timers, scores, or player status,
+    /// enhancing the player's interaction within the game.
+    /// </summary>
     bool RenderDeathrunHud { get; }
 
     #endregion
