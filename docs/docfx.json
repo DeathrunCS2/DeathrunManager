@@ -32,14 +32,13 @@
     ],
     "output": "_site",
     "template": [
-      "default",
       "modern"
     ],
     "globalMetadata": {
-      "_appName": "",
-      "_appTitle": "",
+      "_appName": "CS2 Deathrun Manager",
+      "_appTitle": "Deathrun Manager",
       "_enableSearch": true,
-      "pdf": true
+      "pdf": false
     }
   }
 }
