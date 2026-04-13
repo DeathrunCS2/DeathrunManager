@@ -12,6 +12,36 @@
     },
     {
       "type": "Conceptual",
+      "source_relative_path": "docs/commands.md",
+      "output": {
+        ".html": {
+          "relative_path": "docs/commands.html"
+        }
+      },
+      "version": ""
+    },
+    {
+      "type": "Conceptual",
+      "source_relative_path": "docs/configuration.md",
+      "output": {
+        ".html": {
+          "relative_path": "docs/configuration.html"
+        }
+      },
+      "version": ""
+    },
+    {
+      "type": "Conceptual",
+      "source_relative_path": "docs/examples/basic.md",
+      "output": {
+        ".html": {
+          "relative_path": "docs/examples/basic.html"
+        }
+      },
+      "version": ""
+    },
+    {
+      "type": "Conceptual",
       "source_relative_path": "docs/getting-started.md",
       "output": {
         ".html": {
