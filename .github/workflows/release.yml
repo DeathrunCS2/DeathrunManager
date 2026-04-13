@@ -11,15 +11,15 @@ env:
   DOTNET_VERSION: '10.0.x'
   CONFIGURATION: Release
 
-on:
-  push:
-  if: contains(github.event.head_commit.message, 'push module v')
-  || contains(github.event.head_commit.message, 'push module + api v')
+on:  
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
+    if: contains(github.event.head_commit.message, 'push module v')
+    || contains(github.event.head_commit.message, 'push module + api v')
 
     permissions:
       contents: write
@@ -28,8 +28,14 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          fetch-depth: 0
-
+          fetch-depth: 1
+      
+      
+      - name: Check build release criteria
+        if: ${{ contains($(git log -1 --pretty=%B), 'push module v') 
+                || contains($(git log -1 --pretty=%B), 'push module + api v')}}
+        run: exit 1
+      
       # Versioning
       - name: Versioning
         id: build_version
