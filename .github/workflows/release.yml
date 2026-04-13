@@ -12,6 +12,8 @@ env:
   CONFIGURATION: Release
 
 on:
+  push:
+    if: startsWith(github.event.head_commit.message, 'push module')
   workflow_dispatch:
 
 jobs:
@@ -120,7 +122,9 @@ jobs:
       - name: Build changelog
         id: changelog
         run: |
-          if [ ${{ steps.build_version.outputs.minor_version }} -gt 1 ]; then
+          MINOR_VERSION="${{ steps.build_version.outputs.minor_version }}"
+          
+          if [ "$MINOR" -gt 0 ]; then
             echo "body=Changelog: https://github.com/aquevadis/ms-cs2deathrun-public/compare/${{ steps.changelog_starting_point.outputs.full }}...${{ steps.build_version.outputs.version }}build${{ github.run_number }}" >> $GITHUB_OUTPUT
           else
             echo "body=" >> $GITHUB_OUTPUT
@@ -144,7 +148,7 @@ jobs:
 
       # NuGet
       - name: Build and publish Nuget package
-        if: contains(steps.commit.outputs.message, 'push module + api v')
+        if: startsWith(github.event.head_commit.message, 'push module + api v')
         run: |
           dotnet pack src/DeathrunManager.Shared/DeathrunManager.Shared.csproj --configuration Release --output .build/nuget
           dotnet nuget push .build/nuget/DeathrunManager.Shared.${{ steps.build_version.outputs.version }}.nupkg --skip-duplicate --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
