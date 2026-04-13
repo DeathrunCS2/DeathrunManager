@@ -137,8 +137,8 @@ jobs:
           files: |
             DeathrunManager${{ steps.build_version.outputs.version }}-build${{ github.run_number }}.tar.gz
             DeathrunManager${{ steps.build_version.outputs.version }}-build${{ github.run_number }}.zip     
+          if: ${{ steps.build_version.outputs.minor_version >= 1 }}
           body: |
-            if: ${{ steps.build_version.outputs.minor_version >= 1 }}
             Changelog: https://github.com/aquevadis/ms-cs2deathrun-public/compare/${{ steps.changelog_starting_point.outputs.full }}...${{ format('{0}build{1}', steps.build_version.outputs.version, github.run_number) }}
           draft: false
           prerelease: false
