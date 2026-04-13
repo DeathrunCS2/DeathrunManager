@@ -1,32 +1,17 @@
 {
   "$schema": "https://raw.githubusercontent.com/dotnet/docfx/main/schemas/docfx.schema.json",
   "metadata": [
-
     {
       "src": [
         {
+          "src": "../src",
           "files": [
-            "../src/DeathrunManager/*.csproj",
-          ],
-          "src": "../src/DeathrunManager/*.csproj"
-        }
-      ],
-      "dest": "internals"
-    },
-
-    {
-      "src": [
-        {
-          "files": [
-            "../src/DeathrunManager.Shared/*.csproj",
-          ],
-          "src": "../src/DeathrunManager.Shared/*.csproj"
+            "**/*.csproj"
+          ]
         }
       ],
       "dest": "api"
     }
-
-
   ],
   "build": {
     "content": [
@@ -48,6 +33,7 @@
     ],
     "output": "_site",
     "template": [
+      "default",
       "modern"
     ],
     "globalMetadata": {
