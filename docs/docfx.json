@@ -10,7 +10,19 @@
         }
       ],
       "dest": "api"
+    },
+    {
+      "src": [
+        {
+          "src": "../src",
+          "files": [
+            "../src/DeathrunManager/*.csproj",
+          ]
+        }
+      ],
+      "dest": "internals"
     }
+
   ],
   "build": {
     "content": [
