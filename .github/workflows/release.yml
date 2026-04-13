@@ -8,157 +8,137 @@ env:
   BASE_MODULE_OUTPUT_PATH: "game/sharp/modules/Deathrun.Manager"
   SHARED_OUTPUT_PATH: "game/sharp/shared/DeathrunManager.Shared"
   
-  DOTNET_VERSION: '10.0.x'  # .NET 10.0
+  DOTNET_VERSION: '10.0.x'
   CONFIGURATION: Release
 
 on:
   push:
-    if: contains(github.event.head_commit.message, 'plugin')
-  
-  #   push:
-  #     branches:
-  #       - master  # Run on pushes to master branch
-  #       - refs
-  #       - heads
-  workflow_dispatch: # Allow manual trigger
+    if: contains(github.event.head_commit.message, 'push module v') 
+    || contains(github.event.head_commit.message, 'push module + api v')
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     permissions:
-      contents: write  # Required for creating releases
-      packages: write  # Required for publishing to GitHub Packages
+      contents: write
+      packages: write
 
     steps:
-
-      - name: Checkout code
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
         with:
-          fetch-depth: '0'
-      #
+          fetch-depth: 0
+
+      # Versioning
       - name: Versioning
         id: build_version
         run: |
           VERSION=$(grep -oP '<Version>\K[^<]+' ./src/Directory.Build.props)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Build Version: $VERSION"
 
-          CURRENT_VERSION=$VERSION
-          IFS='.' read -r major minor patch <<< "$CURRENT_VERSION"
+          IFS='.' read -r major minor patch <<< "$VERSION"
 
+          echo "major=$major" >> $GITHUB_OUTPUT
           echo "minor_version=$minor" >> $GITHUB_OUTPUT
-          echo "Minor Version: $minor"
-          
-          COMMIT_HASH=${{ github.sha }}
-          echo "commit_hash_short=${COMMIT_HASH:0:7}" >> $GITHUB_OUTPUT
-          echo "Commit ID: ${COMMIT_HASH:0:7}"
-      #
-      - name: Setup .NET 10 (preview)
-        uses: actions/setup-dotnet@v4
+          echo "patch=$patch" >> $GITHUB_OUTPUT
+
+          echo "commit_hash_short=${GITHUB_SHA:0:7}" >> $GITHUB_OUTPUT
+
+      - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
-      #
-      - name: Restore dependencies
-        run: dotnet restore
-      #      
+
+      - run: dotnet restore
+
+      # Build
       - name: Compile Module
         run: |
-          dotnet publish $BASE_MODULE_PROJECT_PATH --configuration ${{ env.CONFIGURATION }} --no-restore --output $BASE_MODULE_OUTPUT_PATH \
+          dotnet publish $BASE_MODULE_PROJECT_PATH -c $CONFIGURATION --no-restore -o $BASE_MODULE_OUTPUT_PATH \
           -p:Version=${{ steps.build_version.outputs.version }} \
           -p:InformationalVersion=${{ steps.build_version.outputs.commit_hash_short }}
-          dotnet publish $SHARED_PROJECT_PATH --configuration ${{ env.CONFIGURATION }} --no-restore --output $SHARED_OUTPUT_PATH \
+
+          dotnet publish $SHARED_PROJECT_PATH -c $CONFIGURATION --no-restore -o $SHARED_OUTPUT_PATH \
           -p:Version=${{ steps.build_version.outputs.version }} \
           -p:InformationalVersion=${{ steps.build_version.outputs.commit_hash_short }}
-      
-      #      
+
+      # Assets
       - name: Copy assets
         run: |
           if [ -d .asset/game ]; then
             cp -r .asset/game/* game/sharp
-            echo "Assets copied to game/"
-          else
-            echo "No assets found, skipping..."
           fi
-      
-      #      
+
+      # Archives
       - name: Create archives
         run: |
           cd game
           tar -czf ../DeathrunManager${{ steps.build_version.outputs.version }}-build${{ github.run_number }}.tar.gz sharp/
           cd ..
           zip -r DeathrunManager${{ steps.build_version.outputs.version }}-build${{ github.run_number }}.zip game/sharp/
-      
-      #      
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+
+      # Artifacts
+      - uses: actions/upload-artifact@v4
         with:
           name: DeathrunManager${{ steps.build_version.outputs.version }}-build${{ github.run_number }}
           path: |
             game/sharp/modules/Deathrun.Manager/
             game/sharp/shared/DeathrunManager.Shared/
-      #
 
+      # Changelog base (ONLY if minor >= 1)
       - name: Get changelog starting point
+        if: steps.build_version.outputs.minor_version >= 1
         id: changelog_starting_point
-        if: ${{ steps.build_version.outputs.minor_version >= 1}}
         run: |
-          PREVIUS_MINOR_VERSION="$major.$((minor - 1)).$patch"
+          VERSION=${{ steps.build_version.outputs.version }}
+          IFS='.' read -r major minor patch <<< "$VERSION"
 
-          echo "current=$CURRENT_VERSION" >> $GITHUB_OUTPUT
-          echo "previous=$PREVIUS_MINOR_VERSION" >> $GITHUB_OUTPUT
-          
-          echo "Current minor version: $CURRENT_VERSION"
-          echo "Previous minor version: $PREVIUS_MINOR_VERSION"
-          
-          TARGET_VERSION=$PREVIUS_MINOR_VERSION
-          
+          PREV_MINOR="$major.$((minor - 1)).$patch"
+
           git fetch --tags
 
-          LOWEST=build$(git tag | \
-            grep -E "^${TARGET_VERSION}build[0-9]+$" | \
+          LOWEST=$(git tag | \
+            grep -E "^${PREV_MINOR}build[0-9]+$" | \
             sed -E 's/.*build([0-9]+)/\1/' | \
             sort -n | \
             head -n 1)
-          
-          echo "build=$LOWEST" >> $GITHUB_OUTPUT
-          echo "full=$TARGET_VERSION$LOWEST" >> $GITHUB_OUTPUT
-          
-          echo "Oldest build: $LOWEST | For minor version: $TARGET_VERSION"
-      
-      #      
+
+          echo "full=${PREV_MINOR}build${LOWEST}" >> $GITHUB_OUTPUT
+
+      # Build changelog
+      - name: Build changelog
+        id: changelog
+        run: |
+          if [ "${{ steps.build_version.outputs.minor_version }}" -gt 1 ]; then
+            echo "body=Changelog: https://github.com/aquevadis/ms-cs2deathrun-public/compare/${{ steps.changelog_starting_point.outputs.full }}...${{ steps.build_version.outputs.version }}build${{ github.run_number }}" >> $GITHUB_OUTPUT
+          else
+            echo "body=" >> $GITHUB_OUTPUT
+          fi
+
+      # Release
       - name: Create GitHub Release
+        if: |
+          startsWith(github.event.head_commit.message, 'push module v') ||
+          startsWith(github.event.head_commit.message, 'push module + api v')
         uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        if: steps.build_version.outputs.minor_version >= 1
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('{0}build{1}', steps.build_version.outputs.version, github.run_number) }}
-          name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('{0}build{1}', steps.build_version.outputs.version, github.run_number) }}
+          tag_name: ${{ format('{0}build{1}', steps.build_version.outputs.version, github.run_number) }}
+          name: ${{ format('{0}build{1}', steps.build_version.outputs.version, github.run_number) }}
           files: |
             DeathrunManager${{ steps.build_version.outputs.version }}-build${{ github.run_number }}.tar.gz
-            DeathrunManager${{ steps.build_version.outputs.version }}-build${{ github.run_number }}.zip     
-          body:
-            Changelog: https://github.com/aquevadis/ms-cs2deathrun-public/compare/${{ steps.changelog_starting_point.outputs.full }}...${{ format('{0}build{1}', steps.build_version.outputs.version, github.run_number) }}
-          draft: false
-          prerelease: false
-          make_latest: true
-        if: steps.build_version.outputs.minor_version == 0
-        with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('{0}build{1}', steps.build_version.outputs.version, github.run_number) }}
-          name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('{0}build{1}', steps.build_version.outputs.version, github.run_number) }}
-          files: |
-            DeathrunManager${{ steps.build_version.outputs.version }}-build${{ github.run_number }}.tar.gz
-            DeathrunManager${{ steps.build_version.outputs.version }}-build${{ github.run_number }}.zip     
-          body:
-            Changelog: https://github.com/aquevadis/ms-cs2deathrun-public/compare/${{ steps.changelog_starting_point.outputs.full }}...${{ format('{0}build{1}', steps.build_version.outputs.version, github.run_number) }}
-          draft: false
-          prerelease: false
-          make_latest: true
+            DeathrunManager${{ steps.build_version.outputs.version }}-build${{ github.run_number }}.zip
+          body: ${{ steps.changelog.outputs.body }}
+          prerelease: ${{ steps.build_version.outputs.minor_version == 1 }}
 
-      - name: Build Nuget library
-        run: dotnet pack src/DeathrunManager.Shared/DeathrunManager.Shared.csproj --configuration Release --output .build/nuget
+      # NuGet
+      - name: Build NuGet
+        run: dotnet pack $SHARED_PROJECT_PATH -c Release -o .build/nuget
 
-      - name: Publish new version
-        if: ${{ startsWith(github.event.head_commit.message, 'push module v') || startsWith(github.event.head_commit.message, 'push module + api v') }}
-        run: dotnet nuget push .build/nuget/DeathrunManager.Shared.${{ steps.build_version.outputs.version }}.nupkg --skip-duplicate --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
+      if: startsWith(github.event.head_commit.message, 'push module + api v')            
+      - name: Publish NuGet
+        run: dotnet nuget push .build/nuget/*.nupkg \
+          --skip-duplicate \
+          --api-key ${{ secrets.NUGET_API_KEY }} \
+          --source https://api.nuget.org/v3/index.json
