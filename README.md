@@ -124,10 +124,7 @@ The configurations values do exactly what they are labeled, so I believe it does
 }
 ```
 
-### Making Deathrun Manager modules/extensions
-- The deathrun manager features a built-in loader allowing to write modules that cut the overhead when using the ModSharp modules [Shared API](https://docs.modsharp.net/docs/en-us/examples/module-api.html) implementation while still allowing to fully interact with the ModSharp's API itself
-
-# Basic example
+# Basic module example
 
 The deathrun manager features a built-in loader allowing to write modules that cut the overhead when using the ModSharp modules [Shared API](https://docs.modsharp.net/docs/en-us/examples/module-api.html) implementation while still allowing to fully interact with the ModSharp's API itself
 
