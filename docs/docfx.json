@@ -1,17 +1,16 @@
 {
   "$schema": "https://raw.githubusercontent.com/dotnet/docfx/main/schemas/docfx.schema.json",
   "metadata": [
-    {
+{
       "src": [
         {
+          "src": "../src/DeathrunManager.Shared",
           "files": [
-            "../src/DeathrunManager/*.csproj",
-            "../src/DeathrunManager.Shared/*.csproj"
-          ],
-          "src": "../src/"
+            "**/*.csproj"
+          ]
         }
       ],
-      "dest": "api/"
+      "output": "api"
     }
   ],
   "build": {
