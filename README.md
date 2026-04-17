@@ -1,4 +1,4 @@
-## CS2 Deathrun Manager for ModSharp | [Modules](https://github.com/CS2-Deathrun-Modules)
+## CS2 Deathrun Manager for ModSharp | [Modules](https://github.com/DeathrunCS2)
 
 ### Description
 
