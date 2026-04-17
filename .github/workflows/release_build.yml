@@ -146,7 +146,6 @@ jobs:
 
       # NuGet
       - name: Build and publish Nuget package
-        if: ${{ startsWith(steps.commit.outputs.commit_message, 'push module + api v') }}
         run: |
           dotnet pack src/DeathrunManager.Shared/DeathrunManager.Shared.csproj --configuration Release --output .build/nuget
           dotnet nuget push .build/nuget/DeathrunManager.Shared.${{ steps.build_version.outputs.version }}.nupkg --skip-duplicate --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
