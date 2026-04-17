@@ -170,11 +170,11 @@ internal class PlayersManager(
             //remove thinking functions
             removedDeathrunPlayer.StopPlayerThink();
             
-            //skip bots here
-            if (client.SteamId == 0) return;
-
             InvokeRemoved(removedDeathrunPlayer);
 
+            //skip bots here
+            if (client.SteamId == 0) return;
+            
             //check if the lives system is enabled and we are saving the lives to the database
             if (LivesSystemManager.LivesSystemConfig?.EnableLivesSystem is true
                 && LivesSystemManager.LivesSystemConfig.SaveLivesToDatabase is true)
