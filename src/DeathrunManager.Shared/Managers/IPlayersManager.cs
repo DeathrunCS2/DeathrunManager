@@ -34,13 +34,13 @@ public interface IPlayersManager
     event DeathrunDeathrunPlayerSendChatMessageDelegate? SendChatMessage;
 
     /// <summary>
-    /// Fired when a deathrun player object has been successfully added to the player dictionary after successful connection.
+    /// Fired when a deathrun player object has been successfully added to the deathrun players dictionary after successful connection.
     /// </summary>
     event DeathrunPlayerCreatedDelegate? Created;
 
     /// <summary>
-    /// Fired when a deathrun player object has been successfully removed from the player dictionary on disconnect.
-    /// Only fired for real players (bots are skipped).
+    /// Fired when a deathrun player has been removed from the deathrun players dictionary.
+    /// This event is triggered when a player disconnects or is removed from the game.
     /// </summary>
     event DeathrunPlayerRemovedDelegate? Removed;
 
