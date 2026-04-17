@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+      <title>Basic example | CS2 DeathrunManager </title>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <meta name="title" content="Basic example | CS2 DeathrunManager ">
+      
+      
+      <link rel="icon" href="../../favicon.ico">
+      <link rel="stylesheet" href="../../public/docfx.min.css">
+      <link rel="stylesheet" href="../../public/main.css">
+      <meta name="docfx:navrel" content="../../toc.html">
+      <meta name="docfx:tocrel" content="../toc.html">
+      
+      <meta name="docfx:rel" content="../../">
+      
+      
+      <meta name="docfx:docurl" content="https://github.com/DeathrunCS2/DeathrunManager/blob/main/docs/docs/examples/basic.md/#L1">
+      <meta name="loc:inThisArticle" content="In this article">
+      <meta name="loc:searchResultsCount" content="{count} results for &quot;{query}&quot;">
+      <meta name="loc:searchNoResults" content="No results for &quot;{query}&quot;">
+      <meta name="loc:tocFilter" content="Filter by title">
+      <meta name="loc:nextArticle" content="Next">
+      <meta name="loc:prevArticle" content="Previous">
+      <meta name="loc:themeLight" content="Light">
+      <meta name="loc:themeDark" content="Dark">
+      <meta name="loc:themeAuto" content="Auto">
+      <meta name="loc:changeTheme" content="Change theme">
+      <meta name="loc:copy" content="Copy">
+      <meta name="loc:downloadPdf" content="Download PDF">
+
+      <script type="module" src="./../../public/docfx.min.js"></script>
+
+      <script>
+        const theme = localStorage.getItem('theme') || 'auto'
+        document.documentElement.setAttribute('data-bs-theme', theme === 'auto' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : theme)
+      </script>
+
+  </head>
+
+  <body class="tex2jax_ignore" data-layout="" data-yaml-mime="">
+    <header class="bg-body border-bottom">
+      <nav id="autocollapse" class="navbar navbar-expand-md" role="navigation">
+        <div class="container-xxl flex-nowrap">
+          <a class="navbar-brand" href="../../index.html">
+            <img id="logo" class="svg" src="../../logo.svg" alt="CS2 DeathrunManager">
+            CS2 DeathrunManager
+          </a>
+          <button class="btn btn-lg d-md-none border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navpanel" aria-controls="navpanel" aria-expanded="false" aria-label="Toggle navigation">
+            <i class="bi bi-three-dots"></i>
+          </button>
+          <div class="collapse navbar-collapse" id="navpanel">
+            <div id="navbar">
+              <form class="search" role="search" id="search">
+                <i class="bi bi-search"></i>
+                <input class="form-control" id="search-query" type="search" disabled placeholder="Search" autocomplete="off" aria-label="Search">
+              </form>
+            </div>
+          </div>
+        </div>
+      </nav>
+    </header>
+
+    <main class="container-xxl">
+      <div class="toc-offcanvas">
+        <div class="offcanvas-md offcanvas-start" tabindex="-1" id="tocOffcanvas" aria-labelledby="tocOffcanvasLabel">
+          <div class="offcanvas-header">
+            <h5 class="offcanvas-title" id="tocOffcanvasLabel">Table of Contents</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" data-bs-target="#tocOffcanvas" aria-label="Close"></button>
+          </div>
+          <div class="offcanvas-body">
+            <nav class="toc" id="toc"></nav>
+          </div>
+        </div>
+      </div>
+
+      <div class="content">
+        <div class="actionbar">
+          <button class="btn btn-lg border-0 d-md-none" type="button" data-bs-toggle="offcanvas" data-bs-target="#tocOffcanvas" aria-controls="tocOffcanvas" aria-expanded="false" aria-label="Show table of contents">
+            <i class="bi bi-list"></i>
+          </button>
+
+          <nav id="breadcrumb"></nav>
+        </div>
+
+        <article data-uid="">
+<h1 id="basic-example">Basic example</h1>
+
+<p>The deathrun manager features a built-in loader allowing to write modules that cut the overhead when using the ModSharp modules <a href="https://docs.modsharp.net/docs/en-us/examples/module-api.html">Shared API</a> implementation while still allowing to fully interact with the ModSharp's API itself</p>
+<h2 id="basic-module-utilizing-both-modsharps-and-deathrunmanager-shared-api">Basic module utilizing both ModSharp's and DeathrunManager Shared API</h2>
+<div class="WARNING">
+<h5>Warning</h5>
+<p>The deathrun modules must follow this folder structure. The module's folder and .dll/deps.json files <strong>must have the same name to load correctly</strong>!</p>
+</div>
+<pre><code class="lang-csharp">
+└── Deathrun.Manager/
+    └── modules/
+        └── ExampleModule/
+            ├── ExampleModule.dll
+            └── ExampleModule.deps.json
+</code></pre>
+<p><code>ExampleModule.cs</code></p>
+<pre><code class="lang-csharp">
+using System;
+using System.Globalization;
+using DeathrunManager.Shared;
+using DeathrunManager.Shared.Objects;
+using Microsoft.Extensions.Logging;
+using Sharp.Shared;
+
+namespace ExampleModule;
+
+public class ExampleModule : IDeathrunModule
+{
+    public string                                  Name                          =&gt; &quot;Example Module&quot;;
+    public string                                  Author                        =&gt; &quot;AquaVadis&quot;;
+    public IDeathrunManager                        DeathrunManagerApi            { get; } //exposed deathrun manager instance
+
+    private readonly ILogger&lt;ExampleModule&gt;        _logger;
+    private readonly ISharedSystem                 _sharedSystem;
+    
+    //primary ctor is also valid
+    public ExampleModule(ISharedSystem sharedSystem, IDeathrunManager deathrunManagerApi)
+    {
+        _sharedSystem        = sharedSystem;
+        _logger              = sharedSystem.GetLoggerFactory().CreateLogger&lt;ExampleModule&gt;();
+        
+        DeathrunManagerApi   = deathrunManagerApi;
+    }
+        
+    
+    #region IDeathrunModule
+    
+    //This method is called when all the ModSharp modules have been loaded
+    public bool Init(bool hotReload)
+    {
+        //Subscribe to PlayersManager's `Created` event to be notified when a new deathrun player is created
+        DeathrunManagerApi.Managers.PlayersManager.Created += OnDeathrunPlayerCreated;
+        return true;
+    }
+
+    //This method is called right after the Init method
+    public void PostInit(bool hotReload) { }
+
+    //This method is called when all the Deathrun modules have been loaded
+    public void OnAllDeathrunModulesLoaded(bool hotReload) { }
+
+    //This method is called when all the ModSharp modules have been loaded
+    public void OnAllModSharpModulesLoaded() { }
+
+    //The method is called when the DeathrunManager is shutting down, but before shutting down the DeathrunManager's managers
+    public void Shutdown(bool hotReload)
+    {
+        //You must unsubscribe from the PlayersManager's `Created` event to avoid issues when reloading modules
+        DeathrunManagerApi.Managers.PlayersManager.Created -= OnDeathrunPlayerCreated;
+    }
+ 
+    #endregion
+    
+    //This will be called when a new deathrun player is fully created by the DeathrunManager
+    private void OnDeathrunPlayerCreated(IDeathrunPlayer deathrunPlayer)
+    {
+        _logger.LogInformation(&quot;[{moduleName}] {colorMessage}&quot;,
+                                                GetType().Name, 
+                                                $&quot;Deathrun player {deathrunPlayer.Client.Name} has been created!&quot;);
+    }
+    
+    #region Log 
+    
+    private static void Log(string header, string message, 
+        ConsoleColor backgroundColor = ConsoleColor.DarkGray,
+        ConsoleColor textColor = ConsoleColor.Black)
+    {
+        Console.ForegroundColor = textColor;
+        Console.BackgroundColor = backgroundColor;
+        Console.Write($&quot;{header}:&quot;);
+        Console.ResetColor();
+        Console.Write($&quot; {message} \n&quot;);
+    }
+    
+    #endregion
+}
+
+</code></pre>
+<p><code>ExampleModule.csproj</code></p>
+<pre><code class="lang-csharp">
+﻿&lt;Project Sdk=&quot;Microsoft.NET.Sdk&quot;&gt;
+    &lt;PropertyGroup&gt;
+        &lt;TargetFramework&gt;net10.0&lt;/TargetFramework&gt;
+        &lt;ImplicitUsings&gt;disable&lt;/ImplicitUsings&gt;
+        &lt;LangVersion&gt;13&lt;/LangVersion&gt;
+        &lt;Nullable&gt;enable&lt;/Nullable&gt;
+        &lt;AssemblyName&gt;ExampleModule&lt;/AssemblyName&gt;
+        &lt;RootNamespace&gt;ExampleModule&lt;/RootNamespace&gt;
+        &lt;PlatformTarget&gt;x64&lt;/PlatformTarget&gt;
+        &lt;Version&gt;0.0.1&lt;/Version&gt;
+    &lt;/PropertyGroup&gt;
+    
+    &lt;ItemGroup&gt;
+      &lt;PackageReference Include=&quot;DeathrunManager.Shared&quot; Version=&quot;*&quot; /&gt;
+      &lt;PackageReference Include=&quot;ModSharp.Sharp.Shared&quot; Version=&quot;*&quot; /&gt;
+    &lt;/ItemGroup&gt;
+&lt;/Project&gt;
+
+</code></pre>
+
+</article>
+
+        <div class="contribution d-print-none">
+          <a href="https://github.com/DeathrunCS2/DeathrunManager/blob/main/docs/docs/examples/basic.md/#L1" class="edit-link">Edit this page</a>
+        </div>
+
+        <div class="next-article d-print-none border-top" id="nextArticle"></div>
+
+      </div>
+
+      <div class="affix">
+        <nav id="affix"></nav>
+      </div>
+    </main>
+
+    <div class="container-xxl search-results" id="search-results"></div>
+
+    <footer class="border-top text-secondary">
+      <div class="container-xxl">
+        <div class="flex-fill">
+          <span>Made with <a href="https://dotnet.github.io/docfx">docfx</a></span>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>
