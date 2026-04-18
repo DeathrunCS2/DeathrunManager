@@ -10,7 +10,8 @@
           ]
         }
       ],
-      "output": "api"
+      "output": "api",
+      "namespaceLayout": "nested"
     }
   ],
   "build": {
@@ -36,6 +37,9 @@
     "globalMetadata": {
       "_appName": "CS2 DeathrunManager",
       "_appTitle": "CS2 DeathrunManager",
+      "__appLogoUrl": "https://deathruncs2.github.io/DeathrunManager/docs/introduction.html",
+      "_appLogoPath": "images/logo.svg",
+      "_appFaviconPath": "images/favicon.ico",
       "_enableSearch": true,
       "pdf": false
     }
