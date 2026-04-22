@@ -263,22 +263,11 @@ internal class DeathrunModule : IDeathrunModule
         try
         {
             Shutdown(hotReload: true);
-            //fire the Removed deathrun player event when reloading to sync module's deathrun player cache
-            foreach (var deathrunPlayer in PlayersManager.Instance.GetAllValidDeathrunPlayers())
-            {
-                PlayersManager.Instance.InvokeRemoved(deathrunPlayer);
-            }
             
             if (Init(hotReload: true) is not true)
             {
                 Log(ConsoleColor.Black, ConsoleColor.Red, "Failed to Initialize Deathrun Module when being reloaded", "");
                 return false;
-            }
-            
-            //fire the Created deathrun player event when reloading to sync module's deathrun player cache
-            foreach (var deathrunPlayer in PlayersManager.Instance.GetAllValidDeathrunPlayers())
-            {
-                PlayersManager.Instance.InvokeCreated(deathrunPlayer);
             }
             
             PostInit(hotReload: true);
