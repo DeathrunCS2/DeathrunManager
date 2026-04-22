@@ -123,6 +123,10 @@ public class ModulesManager(
             {
                 case "reload":
                     
+                    //fire the Removed deathrun player event when reloading to sync module's deathrun player cache
+                    foreach (var deathrunPlayer in PlayersManager.Instance.GetAllValidDeathrunPlayers())
+                        PlayersManager.Instance.InvokeRemoved(deathrunPlayer);
+                    
                     var reloadedModules = 0;
                     //reload all modules if a module name was not provided and the action name is reload
                     foreach (var deathrunModule in _deathrunModules)
@@ -136,6 +140,11 @@ public class ModulesManager(
                     
                     Log(ConsoleColor.Black, ConsoleColor.DarkMagenta, "Checking for recently added and/or uninitialized deathrun modules...", "");
                     InitModules();
+                    
+                    //fire the Created deathrun player event when reloading to sync module's deathrun player cache
+                    foreach (var deathrunPlayer in PlayersManager.Instance.GetAllValidDeathrunPlayers())
+                        PlayersManager.Instance.InvokeCreated(deathrunPlayer);
+                    
                     break;
                 
                 case "list":
