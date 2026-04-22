@@ -92,7 +92,7 @@ public interface IDeathrunPlayer
     /// specific to the Deathrun game mode, such as timers, scores, or player status,
     /// enhancing the player's interaction within the game.
     /// </summary>
-    bool RenderDeathrunHud { get; }
+    bool RenderDeathrunHud { get; set; }
 
     #endregion
     
