@@ -170,7 +170,7 @@ internal class DeathrunModule : IDeathrunModule
     /// <exception cref="InvalidOperationException">
     /// Thrown if called when the module is in an invalid or uninitialized state.
     /// </exception>
-    public void OnAllModSharpModulesLoaded()                  => _instance?.OnAllModSharpModulesLoaded();
+    public void OnAllModSharpModulesLoaded() => _instance?.OnAllModSharpModulesLoaded();
 
     /// <summary>
     /// Invoked when all Deathrun modules have finished loading. This allows modules
@@ -263,6 +263,11 @@ internal class DeathrunModule : IDeathrunModule
         try
         {
             Shutdown(hotReload: true);
+            //fire the Removed deathrun player event when reloading to sync module's deathrun player cache
+            foreach (var deathrunPlayer in PlayersManager.Instance.GetAllValidDeathrunPlayers())
+            {
+                PlayersManager.Instance.InvokeRemoved(deathrunPlayer);
+            }
             
             if (Init(hotReload: true) is not true)
             {
@@ -270,14 +275,13 @@ internal class DeathrunModule : IDeathrunModule
                 return false;
             }
             
-            PostInit(hotReload: true);
-            
-            //fire the Created and Removed deathrun player event when re-sync module's deathrun player cache
+            //fire the Created deathrun player event when reloading to sync module's deathrun player cache
             foreach (var deathrunPlayer in PlayersManager.Instance.GetAllValidDeathrunPlayers())
             {
-                PlayersManager.Instance.InvokeRemoved(deathrunPlayer);
                 PlayersManager.Instance.InvokeCreated(deathrunPlayer);
             }
+            
+            PostInit(hotReload: true);
             
             if (shouldNotifyAllDeathrunModules) OnAllDeathrunModulesLoaded(hotReload: true);
         }
