@@ -127,13 +127,13 @@ internal class DeathrunModule : IDeathrunModule
             _moduleLoader = moduleLoader;
             _instance = deathrunModule;
             
-            if (_instance.Init(hotReload: false) is not true)
+            if (_instance.Init(hotReload) is not true)
                 throw new ApplicationException($"Failed to initialize deathrun module: {assembly.GetName().Name}");
             
             State = ModuleState.Running;
             
             //call post-init
-            _instance?.PostInit(hotReload: false); 
+            _instance?.PostInit(hotReload); 
             
             Log(ConsoleColor.Black, ConsoleColor.Green, "Load Deathrun Module", $"{Identifier}");
             return true;
@@ -160,7 +160,7 @@ internal class DeathrunModule : IDeathrunModule
     /// If true, the module should reload any necessary state or configuration
     /// that may have changed during runtime.
     /// </param>
-    public void PostInit(bool hotReload) => _instance?.PostInit(hotReload: false);
+    public void PostInit(bool hotReload) => _instance?.PostInit(hotReload);
 
     /// <summary>
     /// Invoked when all ModSharp modules have completed loading. This provides
@@ -183,7 +183,7 @@ internal class DeathrunModule : IDeathrunModule
     /// <exception cref="InvalidOperationException">
     /// Thrown if this method is invoked when modules are in an invalid state or incomplete.
     /// </exception>
-    public void OnAllDeathrunModulesLoaded(bool hotReload) => _instance?.OnAllDeathrunModulesLoaded(hotReload: false);
+    public void OnAllDeathrunModulesLoaded(bool hotReload) => _instance?.OnAllDeathrunModulesLoaded(hotReload);
 
     /// <summary>
     /// Shuts down the current Deathrun module, ensuring proper cleanup of resources
@@ -203,7 +203,7 @@ internal class DeathrunModule : IDeathrunModule
 
         State = ModuleState.Unloading;
 
-        _instance?.Shutdown(hotReload: false);
+        _instance?.Shutdown(hotReload);
         
         if (hotReload)
         {
