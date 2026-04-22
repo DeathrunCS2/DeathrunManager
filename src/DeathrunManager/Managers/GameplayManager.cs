@@ -55,8 +55,10 @@ public class GameplayManager(
     public event IGameplayManager.RoundStartDelegate? RoundStarted;
     public event IGameplayManager.RoundEndDelegate? RoundEnded;
     
-    // ReSharper disable once MemberCanBePrivate.Global
-    public static IGameRules GameRules = null!;
+    public event IGameplayManager.GameStartDelegate? GameStarted;
+    public event IGameplayManager.MapStartDelegate? MapStarted;
+    public event IGameplayManager.MapEndDelegate? MapEnded;
+
     
     // ReSharper disable once InconsistentNaming
     private static DeathrunGameModeVarsConfig GameVarsConfig = null!;
@@ -64,7 +66,7 @@ public class GameplayManager(
     private IConVar? _autoBunnyHopCvar  = null;
     
     private bool _mapStarted = false;
-    private bool _executedGameCvars = false;
+    private bool _gameStarted = false;
     
     #region IModule
     
@@ -201,25 +203,41 @@ public class GameplayManager(
     //Game Listeners
     public void OnGameInit()
     {
-        GameRules = DeathrunManager.Bridge.ModSharp.GetGameRules();
-        
-        modSharp.PushTimer(ExecGameVars, 5f);
-    }
+        //skip if the game has already started
+        if (_gameStarted) return;
 
+        modSharp.PushTimer(ExecGameVars, 5f);
+        
+        GameStarted?.Invoke(modSharp.GetMapName() ?? "error");
+
+        //set that the game started
+        _gameStarted = true;
+    }
+    
     public void OnGameActivate()
     {
-        if (_mapStarted is not true)
-        {
-            StartMapThinker();
-        }
+        //skip if the map has already started
+        if (_mapStarted) return;
         
+        StartMapThinker();
+        
+        //set that the map started
         _mapStarted = true;
+        
+        //fire that the map started
+        MapStarted?.Invoke(modSharp.GetMapName() ?? "error");
     }
     
     public void OnGameDeactivate()
     {
+        //set that the current map has ended
         _mapStarted = false;
-        _executedGameCvars = false;
+        
+        //set that the current game has ended
+        _gameStarted = false;
+        
+        //fire that the map ended
+        MapEnded?.Invoke(modSharp.GetMapName() ?? "error");
     }
 
     //Client Listeners
@@ -232,7 +250,7 @@ public class GameplayManager(
 
         if (deathrunPlayer.Class is DPlayerClass.GameMaster)
         {
-            GameRules.TerminateRound(3, RoundEndReason.CTsWin);
+            modSharp.GetGameRules().TerminateRound(3, RoundEndReason.CTsWin);
         }
     }
     
@@ -281,7 +299,7 @@ public class GameplayManager(
         SetRoundState(DRoundState.StartPre);
         
         //skip if we are in a warmup period;
-        if (GameRules.IsWarmupPeriod is true)
+        if (modSharp.GetGameRules().IsWarmupPeriod is true)
         {
             logger.LogInformation("[GameplayManager][OnRoundStart] {colorMessage}", "Game mode stopped during warmup period!");
             return;
@@ -306,7 +324,7 @@ public class GameplayManager(
             if (PickGameMaster() is not true)
             {
                 logger.LogInformation("[GameplayManager][OnRoundStart] {colorMessage}", "Failed picking game master!");
-                GameRules.TerminateRound(2, RoundEndReason.RoundDraw);
+                modSharp.GetGameRules().TerminateRound(2, RoundEndReason.RoundDraw);
                 return;
             }
         
@@ -469,8 +487,6 @@ public class GameplayManager(
 
     private void ExecGameVars()
     {
-        if (_executedGameCvars is true) return;
-        
         logger.LogInformation("[Deathrun][GameplayManager] {colorMessage}", "Start executing game mode cvars!");
 
         ExecuteGameVarsChunks(GetGameVarsChunks(GameVarsConfig.Teams, 6));
@@ -482,8 +498,6 @@ public class GameplayManager(
             ExecuteGameVarsChunks(GetGameVarsChunks(GameVarsConfig.RoundTimer, 6));
         if (baseConfig.EnableClippingThroughTeamMates is true)
             ExecuteGameVarsChunks(GetGameVarsChunks(GameVarsConfig.PlayerClipping, 6));
-        
-        _executedGameCvars = true;
     }
 
     private static void ExecuteGameVarsChunks(IEnumerable<string> gameVarsChunks)
@@ -550,23 +564,6 @@ public class GameplayManager(
             }
 
             _deathrunRoundState = DRoundState.Unset;
-
-            // var aliveDeathrunPlayers = playersManager.GetAllAliveDeathrunPlayers();
-            //
-            // //skip if there is only one player in the server and it's alive
-            // if (validDeathrunPlayers.Count is 1 && aliveDeathrunPlayers.Count is 1) return;
-            //
-            // switch (aliveDeathrunPlayers.Count)
-            // {
-            //     //restart the round if there is a valid(dead) player and no other live player/s
-            //     case 0 or 1 when validDeathrunPlayers.Count is 1 
-            //                 && validDeathrunPlayers.First().PlayerPawn?.IsAlive is true:
-            //     
-            //     //restart the round if there is one player alive and two or more valid(dead) players
-            //     case >= 2 when validDeathrunPlayers.Count >= 2 && _gameMasterDeathrunPlayer is null:
-            //                           GameRules.TerminateRound(2, RoundEndReason.RoundDraw);
-            //         break;
-            // }
 
         }, 5f, GameTimerFlags.Repeatable | GameTimerFlags.StopOnMapEnd);
     }

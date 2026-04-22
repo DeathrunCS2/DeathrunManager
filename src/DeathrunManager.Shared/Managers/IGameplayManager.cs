@@ -16,6 +16,9 @@ public interface IGameplayManager
                                                   float damageTaken, float damageTotal);
     delegate void RoundStartDelegate();
     delegate void RoundEndDelegate();
+    delegate void GameStartDelegate(string mapName);
+    delegate void MapStartDelegate(string mapName);
+    delegate void MapEndDelegate(string mapName);
 
     /// <summary>
     /// Fired when a game master is picked at the start of a deathrun round.
@@ -41,6 +44,21 @@ public interface IGameplayManager
     /// Fired after the deathrun round has ended.
     /// </summary>
     event RoundEndDelegate? RoundEnded;
+
+    /// <summary>
+    /// Fired when a game begins
+    /// </summary>
+    event GameStartDelegate? GameStarted;
+
+    /// <summary>
+    /// Triggered when a new map starts in the game, providing the name of the map.
+    /// </summary>
+    event MapStartDelegate? MapStarted;
+
+    /// <summary>
+    /// Fired when the current map ends.
+    /// </summary>
+    event MapEndDelegate? MapEnded;
 
     #endregion
     
