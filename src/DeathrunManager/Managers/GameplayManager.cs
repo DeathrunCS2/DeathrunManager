@@ -221,11 +221,11 @@ public class GameplayManager(
         
         StartMapThinker();
         
-        //set that the map started
-        _mapStarted = true;
-        
         //fire that the map started
         MapStarted?.Invoke(modSharp.GetMapName() ?? "error");
+        
+        //set that the map started
+        _mapStarted = true;
     }
     
     public void OnGameDeactivate()
