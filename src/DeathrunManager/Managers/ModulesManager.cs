@@ -239,11 +239,11 @@ public class ModulesManager(
     
     #region ConsoleLog
     
-    private static void Log(ConsoleColor textColor, ConsoleColor backgroundColor, string header, string message)
+    private static void Log(ConsoleColor textColor, ConsoleColor backgroundColor, string? header, string message)
     {
         Console.ForegroundColor = textColor;
         Console.BackgroundColor = backgroundColor;
-        Console.Write($"         {header}:");
+        Console.Write($"         {(header is not null ? header + ':' : "")}");
         Console.ResetColor();
         Console.Write($" {message} \n");
     }
