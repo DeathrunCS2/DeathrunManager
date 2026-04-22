@@ -1,8 +1,8 @@
 using System;
 using System.IO;
 using System.Linq;
+using DeathrunManager.Managers;
 using DeathrunManager.Shared;
-using DeathrunManager.Shared.DeathrunObjects;
 using McMaster.NETCore.Plugins;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -271,6 +271,13 @@ internal class DeathrunModule : IDeathrunModule
             }
             
             PostInit(hotReload: true);
+            
+            //fire the Created and Removed deathrun player event when re-sync module's deathrun player cache
+            foreach (var deathrunPlayer in PlayersManager.Instance.GetAllValidDeathrunPlayers())
+            {
+                PlayersManager.Instance.InvokeRemoved(deathrunPlayer);
+                PlayersManager.Instance.InvokeCreated(deathrunPlayer);
+            }
             
             if (shouldNotifyAllDeathrunModules) OnAllDeathrunModulesLoaded(hotReload: true);
         }
