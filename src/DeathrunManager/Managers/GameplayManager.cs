@@ -199,13 +199,18 @@ public class GameplayManager(
     #region Listeners
     
     //Game Listeners
-    public void OnGameInit() => GameRules = DeathrunManager.Bridge.ModSharp.GetGameRules();
+    public void OnGameInit()
+    {
+        GameRules = DeathrunManager.Bridge.ModSharp.GetGameRules();
+        
+        modSharp.PushTimer(ExecGameVars, 5f);
+    }
+
     public void OnGameActivate()
     {
         if (_mapStarted is not true)
         {
             StartMapThinker();
-            modSharp.PushTimer(ExecGameVars, 5f);
         }
         
         _mapStarted = true;
@@ -515,35 +520,55 @@ public class GameplayManager(
         //game teams unstuck logic
         modSharp.PushTimer(() =>
         {
-            var currentGameMaster = GetGameMaster();
-            
             //skip if we are already ending the round
-            if (GetRoundState() >= DRoundState.EndPre) return;
+            if (GetRoundState() >= DRoundState.EndPre
+                || GetRoundState() is >= DRoundState.PickingGameMaster) return;
             
             var validDeathrunPlayers 
                 = playersManager
-                    .GetAllValidDeathrunPlayers().FilterPlayers(deathrunPlayer => deathrunPlayer.Controller?.Team 
+                    .GetAllAliveDeathrunPlayers().FilterPlayers(deathrunPlayer => deathrunPlayer.Controller?.Team 
                                                                                   is not CStrikeTeam.Spectator 
                                                                                   and CStrikeTeam.UnAssigned);
-            
-            var aliveDeathrunPlayers = playersManager.GetAllAliveDeathrunPlayers();
-            
-            //skip if there is only one player in the server and it's alive
-            if (validDeathrunPlayers.Count is 1 && aliveDeathrunPlayers.Count is 1) return;
 
-            switch (aliveDeathrunPlayers.Count)
+            if (validDeathrunPlayers.Count is 0 or 1) return;
+            
+            var hasTSidePlayer = false;
+
+            foreach (var validDeathrunPlayer in validDeathrunPlayers)
             {
-                //restart the round if there is a valid(dead) player and no other live player/s
-                case 0 or 1 when validDeathrunPlayers.Count is 1 
-                            && validDeathrunPlayers.First().PlayerPawn?.IsAlive is true:
-                
-                //restart the round if there is one player alive and two or more valid(dead) players
-                case >= 2 when validDeathrunPlayers.Count >= 2 && _gameMasterDeathrunPlayer is null:
-                                      GameRules.TerminateRound(2, RoundEndReason.RoundDraw);
+                if (validDeathrunPlayer.Controller?.Team is CStrikeTeam.TE)
+                {
+                    hasTSidePlayer = true;
                     break;
+                }
             }
 
-        }, 15f, GameTimerFlags.Repeatable | GameTimerFlags.StopOnMapEnd);
+            if (hasTSidePlayer is not true)
+            {
+                modSharp.ServerCommand("bot_add t");
+                modSharp.ServerCommand("bot_kick t");
+            }
+
+            _deathrunRoundState = DRoundState.Unset;
+
+            // var aliveDeathrunPlayers = playersManager.GetAllAliveDeathrunPlayers();
+            //
+            // //skip if there is only one player in the server and it's alive
+            // if (validDeathrunPlayers.Count is 1 && aliveDeathrunPlayers.Count is 1) return;
+            //
+            // switch (aliveDeathrunPlayers.Count)
+            // {
+            //     //restart the round if there is a valid(dead) player and no other live player/s
+            //     case 0 or 1 when validDeathrunPlayers.Count is 1 
+            //                 && validDeathrunPlayers.First().PlayerPawn?.IsAlive is true:
+            //     
+            //     //restart the round if there is one player alive and two or more valid(dead) players
+            //     case >= 2 when validDeathrunPlayers.Count >= 2 && _gameMasterDeathrunPlayer is null:
+            //                           GameRules.TerminateRound(2, RoundEndReason.RoundDraw);
+            //         break;
+            // }
+
+        }, 5f, GameTimerFlags.Repeatable | GameTimerFlags.StopOnMapEnd);
     }
     
     #endregion
