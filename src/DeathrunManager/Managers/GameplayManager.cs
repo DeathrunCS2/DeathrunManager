@@ -97,9 +97,7 @@ public class GameplayManager(
         
         return true;
     }
-
-    public static void OnPostInit() { }
-
+    
     public void Shutdown()
     {
         hookManager.PlayerSpawnPost.RemoveForward(PlayerSpawnPost);
@@ -205,8 +203,6 @@ public class GameplayManager(
     {
         //skip if the game has already started
         if (_gameStarted) return;
-
-        modSharp.PushTimer(ExecGameVars, 5f);
         
         GameStarted?.Invoke(modSharp.GetMapName() ?? "error");
 
@@ -223,6 +219,8 @@ public class GameplayManager(
         
         //fire that the map started
         MapStarted?.Invoke(modSharp.GetMapName() ?? "error");
+        
+        ExecGameVars();
         
         //set that the map started
         _mapStarted = true;
