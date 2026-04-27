@@ -211,7 +211,7 @@ public class DeathrunPlayer : IDeathrunPlayer
         if (IsThinking is not true) return;
 
         //when `this`'s PlayerPawn is alive we print the center menu to self
-        if (PlayerPawn?.IsAlive is true)
+        if (IsValidAndAlive)
         {
             if (LivesSystem is not null && EconomySystem is not null)
                 SetCenterMenuBottomRowHtml(LivesSystem.GetLivesCounterHtmlString() + EconomySystem.GetCreditsNumHtmlString());
@@ -305,7 +305,7 @@ public class DeathrunPlayer : IDeathrunPlayer
         if (string.IsNullOrEmpty(message) is true) return;
         
         //ensure the client is valid, not a fake-client/hltv or bot
-        if (Client.IsValid is not true 
+        if (Client?.IsValid is not true 
             || Client.SteamId == 0 
             || Client.IsFakeClient is true 
             || Client.IsHltv is true) return;
