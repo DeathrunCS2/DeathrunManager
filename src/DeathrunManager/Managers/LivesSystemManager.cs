@@ -80,9 +80,9 @@ internal class LivesSystemManager(
         if (victimDeathrunPlayer is null) return;
         
         var attackerDeathrunPlayer = playersManager.GetAllAliveDeathrunPlayers().FirstOrDefault(deathrunPlayer => deathrunPlayer.Controller?.PlayerSlot == parms.AttackerPlayerSlot);
-        if (attackerDeathrunPlayer is null) return;
+        if (attackerDeathrunPlayer?.LivesSystem is null) return;
         
-        if (attackerDeathrunPlayer.LivesSystem is null) return;
+        if (attackerDeathrunPlayer == victimDeathrunPlayer) return;
         
         attackerDeathrunPlayer.LivesSystem.AddLivesNum(1);
         attackerDeathrunPlayer
