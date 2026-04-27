@@ -1,4 +1,5 @@
-﻿using DeathrunManager.Shared.DeathrunObjects;
+﻿using DeathrunManager.Managers;
+using DeathrunManager.Shared.DeathrunObjects;
 
 namespace DeathrunManager.Objects;
 
@@ -22,6 +23,8 @@ public class EconomySystem(IDeathrunPlayer deathrunPlayer) : IEconomySystem
     
     public string? GetCreditsNumHtmlString()
     {
+        if (EconomyManager.EconomySystemConfig?.ShowCreditsHud is not true) return null;
+        
         return $"<font class='fontSize-m stratum-font fontWeight-Bold' color='#A7A7A7'> | </font>"
                + $"<font class='fontSize-s stratum-font fontWeight-Bold' color='#A7A7A7'>CREDITS: </font>"
                + $"<font class='fontSize-sm stratum-font fontWeight-Bold' color='limegreen'>{Owner.EconomySystem?.Credits}</font>";

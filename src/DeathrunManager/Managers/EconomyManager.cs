@@ -168,6 +168,7 @@ public class EconomySystemConfig
     public int StartCreditsNum { get; init; } = 5;
     public int KillCreditsNum { get; init; } = 2;
     public int GameMasterKillCreditsBonusNum { get; init; } = 2;
+    public bool ShowCreditsHud { get; init; } = true;
 
     
     public string Spacer { get; init; } = "// If EnableEconomySystem is true, you have to configure the database connection details below too.";
