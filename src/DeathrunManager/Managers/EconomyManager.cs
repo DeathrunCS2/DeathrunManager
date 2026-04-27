@@ -4,13 +4,19 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Dapper;
 using DeathrunManager.Interfaces.Managers;
+using DeathrunManager.Shared.Enums;
+using DeathrunManager.Shared.Managers;
 using Microsoft.Extensions.Logging;
 using MySqlConnector;
+using Sharp.Shared.HookParams;
+using Sharp.Shared.Managers;
 
 namespace DeathrunManager.Managers;
 
 internal class EconomyManager(
-    ILogger<EconomyManager> logger) : IEconomyManager
+    ILogger<EconomyManager> logger,
+    IHookManager hookManager,
+    IPlayersManager playersManager) : IEconomyManager
 {
     public static EconomySystemConfig EconomySystemConfig = null!;
     private static string ConnectionString { get; set; } = "";
@@ -28,6 +34,8 @@ internal class EconomyManager(
             return true;
         }
         
+        hookManager.PlayerKilledPost.InstallForward(PlayerKilledPost);
+        
         //build connection string
         BuildDbConnectionString();
 
@@ -36,9 +44,7 @@ internal class EconomyManager(
        
         return true;
     }
-
-    public static void OnPostInit() { }
-
+    
     public void Shutdown()
     {
         if (EconomySystemConfig.EnableEconomySystem is not true)
@@ -46,7 +52,33 @@ internal class EconomyManager(
             return;
         }
         
+        hookManager.PlayerKilledPost.RemoveForward(PlayerKilledPost);
+    }
+
+    #endregion
+    
+    #region Hooks
+
+    private void PlayerKilledPost(IPlayerKilledForwardParams parms)
+    {
+        var victimDeathrunPlayer = playersManager.GetDeathrunPlayer(parms.Client);
+        if (victimDeathrunPlayer is null) return;
         
+        var attackerDeathrunPlayer = playersManager.GetDeathrunPlayer(parms.AttackerPawnHandle);
+
+        if (attackerDeathrunPlayer?.EconomySystem is null) return;
+        
+        attackerDeathrunPlayer.EconomySystem.AddCreditsNum(EconomySystemConfig.KillCreditsNum);
+        attackerDeathrunPlayer
+            .SendChatMessage($"You've received {{GREEN}}{EconomySystemConfig.KillCreditsNum} {{DEFAULT}}credits for killing "
+                             + $"{{RED}}{victimDeathrunPlayer.Client.Name}{{DEFAULT}}!");
+        
+        //skip if the attacker is not a GameMaster(Terrorist)
+        if (attackerDeathrunPlayer.Class is not DPlayerClass.GameMaster) return;
+        
+        attackerDeathrunPlayer.EconomySystem.AddCreditsNum(EconomySystemConfig.GameMasterKillCreditsBonusNum);
+        attackerDeathrunPlayer
+            .SendChatMessage($"You've also received a {{GOLD}}{EconomySystemConfig.GameMasterKillCreditsBonusNum} {{DEFAULT}}credits bonus for killing a contestant!");
     }
 
     #endregion
@@ -132,7 +164,10 @@ public class EconomySystemConfig
 {
     public bool EnableEconomySystem { get; init; } = true;
     public int StartCreditsNum { get; init; } = 5;
+    public int KillCreditsNum { get; init; } = 2;
+    public int GameMasterKillCreditsBonusNum { get; init; } = 2;
 
+    
     public string Spacer { get; init; } = "// If EnableEconomySystem is true, you have to configure the database connection details below too.";
     
     public string Host { get; init; } = "localhost";
