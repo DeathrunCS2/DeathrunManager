@@ -213,8 +213,8 @@ public class DeathrunPlayer : IDeathrunPlayer
         //when `this`'s PlayerPawn is alive we print the center menu to self
         if (PlayerPawn?.IsAlive is true)
         {
-            if (LivesSystem is not null)
-                SetCenterMenuBottomRowHtml(LivesSystem.GetLivesCounterHtmlString());
+            if (LivesSystem is not null && EconomySystem is not null)
+                SetCenterMenuBottomRowHtml(LivesSystem.GetLivesCounterHtmlString() + EconomySystem.GetCreditsNumHtmlString());
             
             PrintToCenterHtml
             (
