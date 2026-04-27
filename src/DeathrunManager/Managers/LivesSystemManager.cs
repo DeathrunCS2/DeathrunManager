@@ -34,7 +34,7 @@ internal class LivesSystemManager(
         
         if (LivesSystemConfig.EnableLivesSystem is not true)
         {
-            logger.LogWarning("[LivesSystem] {0}!", "The Lives System is disabled entirely");
+            logger.LogWarning("[LivesSystem] {0}!", "The Lives System is disabled!");
             return true;
         }
         
