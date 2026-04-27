@@ -16,6 +16,7 @@ public class DeathrunPlayer : IDeathrunPlayer
 {
     public DeathrunPlayer(IGameClient client)
     {
+        if (client?.IsValid is not true) throw new ArgumentNullException(nameof(client));
         Client = client;
         
         StartPlayerThink();
