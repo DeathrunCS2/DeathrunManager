@@ -93,7 +93,7 @@ public class LivesSystem(IDeathrunPlayer deathrunPlayer) : ILivesSystem
     {
         if (LivesSystemManager.LivesSystemConfig?.ShowLivesCounter is not true) return null;
             
-        return $"<font class='fontSize-m stratum-font fontWeight-Bold' color='#A7A7A7'>Extra Lives: </font>"
-               + $"<font class='fontSize-m stratum-font fontWeight-Bold' color='orange'>{Owner?.LivesSystem?.GetLivesNum}</font>";
+        return $"<font class='fontSize-s stratum-font fontWeight-Bold' color='#A7A7A7'>EXTRA LIVES: </font>"
+               + $"<font class='fontSize-sm stratum-font fontWeight-Bold' color='gold'>{Owner?.LivesSystem?.GetLivesNum}</font>";
     }
 }

@@ -23,8 +23,8 @@ public class EconomySystem(IDeathrunPlayer deathrunPlayer) : IEconomySystem
     public string? GetCreditsNumHtmlString()
     {
         return $"<font class='fontSize-m stratum-font fontWeight-Bold' color='#A7A7A7'> | </font>"
-               + $"<font class='fontSize-m stratum-font fontWeight-Bold' color='limegreen'>Credits: </font>"
-               + $"<font class='fontSize-m stratum-font fontWeight-Bold' color='gold'>{Owner.EconomySystem?.Credits}</font>";
+               + $"<font class='fontSize-s stratum-font fontWeight-Bold' color='#A7A7A7'>CREDITS: </font>"
+               + $"<font class='fontSize-sm stratum-font fontWeight-Bold' color='limegreen'>{Owner.EconomySystem?.Credits}</font>";
     }
     
 }
