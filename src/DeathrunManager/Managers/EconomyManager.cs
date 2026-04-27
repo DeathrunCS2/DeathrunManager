@@ -12,7 +12,7 @@ namespace DeathrunManager.Managers;
 internal class EconomyManager(
     ILogger<EconomyManager> logger) : IEconomyManager
 {
-    private static EconomySystemConfig _economySystemConfig = null!;
+    public static EconomySystemConfig EconomySystemConfig = null!;
     private static string ConnectionString { get; set; } = "";
     
     #region IModule
@@ -20,9 +20,9 @@ internal class EconomyManager(
     public bool Init()
     {
         //load database config
-        _economySystemConfig = LoadEconomySystemConfig();
+        EconomySystemConfig = LoadEconomySystemConfig();
         
-        if (_economySystemConfig.EnableEconomySystem is not true)
+        if (EconomySystemConfig.EnableEconomySystem is not true)
         {
             logger.LogWarning("[EconomySystem] {0}!", "The Economy System is disabled!");
             return true;
@@ -41,7 +41,7 @@ internal class EconomyManager(
 
     public void Shutdown()
     {
-        if (_economySystemConfig.EnableEconomySystem is not true)
+        if (EconomySystemConfig.EnableEconomySystem is not true)
         {
             return;
         }
@@ -58,11 +58,11 @@ internal class EconomyManager(
         //build connection string
         ConnectionString = new MySqlConnectionStringBuilder
         {
-            Database = _economySystemConfig.Database,
-            UserID = _economySystemConfig.User,
-            Password = _economySystemConfig.Password,
-            Server = _economySystemConfig.Host,
-            Port = (uint)_economySystemConfig.Port,
+            Database = EconomySystemConfig.Database,
+            UserID = EconomySystemConfig.User,
+            Password = EconomySystemConfig.Password,
+            Server = EconomySystemConfig.Host,
+            Port = (uint)EconomySystemConfig.Port,
         }.ConnectionString;
     }
 
@@ -72,7 +72,7 @@ internal class EconomyManager(
 
     private static void SetupDatabaseTables()
     {
-        Task.Run(() => CreateDatabaseTable($@" CREATE TABLE IF NOT EXISTS `{_economySystemConfig.TableName}` 
+        Task.Run(() => CreateDatabaseTable($@" CREATE TABLE IF NOT EXISTS `{EconomySystemConfig.TableName}` 
                                                (
                                                    `id` BIGINT NOT NULL AUTO_INCREMENT,
                                                    `steamid64` BIGINT(255) NOT NULL UNIQUE,
@@ -123,7 +123,7 @@ internal class EconomyManager(
     }
     
     //reload config
-    public static void ReloadConfig() => _economySystemConfig = LoadEconomySystemConfig();
+    public static void ReloadConfig() => EconomySystemConfig = LoadEconomySystemConfig();
     
     #endregion
 }
