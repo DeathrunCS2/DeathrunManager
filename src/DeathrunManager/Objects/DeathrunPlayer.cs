@@ -16,7 +16,6 @@ public class DeathrunPlayer : IDeathrunPlayer
 {
     public DeathrunPlayer(IGameClient client)
     {
-        if (client?.IsValid is not true) throw new ArgumentNullException(nameof(client));
         Client = client;
         
         StartPlayerThink();
@@ -245,8 +244,8 @@ public class DeathrunPlayer : IDeathrunPlayer
             if (observedDeathrunPlayer != ObservedDeathrunPlayer)
                 ObservedDeathrunPlayer = observedDeathrunPlayer;
             
-            if (observedDeathrunPlayer.LivesSystem is not null)
-                SetCenterMenuBottomRowHtml(observedDeathrunPlayer.LivesSystem.GetLivesCounterHtmlString());
+            if (observedDeathrunPlayer.LivesSystem is not null && observedDeathrunPlayer.EconomySystem is not null)
+                SetCenterMenuBottomRowHtml(observedDeathrunPlayer.LivesSystem.GetLivesCounterHtmlString() + observedDeathrunPlayer.EconomySystem.GetCreditsNumHtmlString());
             
             PrintToCenterHtml
             (
