@@ -42,6 +42,10 @@ public interface IEconomySystem
     /// Resets the credits of the associated player in the economy system to zero.
     /// </summary>
     void ResetCredits();
-    
+
+    /// <summary>
+    /// Generates and returns an HTML string representation of the associated player's current number of credits.
+    /// </summary>
+    /// <returns>An HTML-formatted string displaying the player's credits, or null if the information is unavailable.</returns>
     string? GetCreditsNumHtmlString();
 }
