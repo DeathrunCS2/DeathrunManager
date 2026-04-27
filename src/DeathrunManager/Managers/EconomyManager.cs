@@ -65,8 +65,10 @@ internal class EconomyManager(
         if (victimDeathrunPlayer is null) return;
         
         var attackerDeathrunPlayer = playersManager.GetDeathrunPlayer(parms.AttackerPawnHandle);
-
         if (attackerDeathrunPlayer?.EconomySystem is null) return;
+        
+        //skip self inflicted kills
+        if (attackerDeathrunPlayer == victimDeathrunPlayer) return;
         
         attackerDeathrunPlayer.EconomySystem.AddCreditsNum(EconomySystemConfig.KillCreditsNum);
         attackerDeathrunPlayer
