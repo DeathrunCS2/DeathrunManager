@@ -19,7 +19,7 @@ internal class EconomyManager(
     IPlayersManager playersManager) : IEconomyManager
 {
     public static EconomySystemConfig EconomySystemConfig = null!;
-    private static string ConnectionString { get; set; } = "";
+    public static string ConnectionString { get; set; } = "";
     
     #region IModule
     
