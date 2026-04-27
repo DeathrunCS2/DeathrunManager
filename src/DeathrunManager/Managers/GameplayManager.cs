@@ -157,6 +157,8 @@ public class GameplayManager(
         
         modSharp.PushTimer(() =>
         {
+            if (deathrunPlayer?.IsValidAndAlive is not true) return;
+            
             var deathrunPlayerWeapons = deathrunPlayer.PlayerPawn?.GetWeaponService()?.GetMyWeapons();
             if (deathrunPlayerWeapons is null) return;
 
