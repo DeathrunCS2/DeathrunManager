@@ -144,6 +144,18 @@ internal class PlayersManager(
                 deathrunPlayer.LivesSystem?.SetLivesNum(livesNumFromDb);
             });
         }
+
+        //get economy data from the database if we've set the EnableEconomySystem to true
+        if (EconomyManager.EconomySystemConfig.EnableEconomySystem is true)
+        {
+            Task.Run(async () =>
+            {
+                ulong steamId64 = deathrunPlayer.Client.SteamId;
+                var creditsNumFromDb = await GetSavedCredits(steamId64);
+                
+                deathrunPlayer.EconomySystem?.SetCreditsNum(creditsNumFromDb);
+            });
+        }
     }
     
     public void OnClientPutInServer(IGameClient client)
@@ -175,16 +187,33 @@ internal class PlayersManager(
             //skip bots here
             if (client.SteamId == 0) return;
             
+            ulong steamId64 = removedDeathrunPlayer.Client.SteamId;
+            
             //check if the lives system is enabled and we are saving the lives to the database
             if (LivesSystemManager.LivesSystemConfig?.EnableLivesSystem is true
                 && LivesSystemManager.LivesSystemConfig.SaveLivesToDatabase is true)
             {
-                if (removedDeathrunPlayer.LivesSystem is null) return;
+                Task.Run( async () =>
+                {
+                    if (removedDeathrunPlayer.LivesSystem is null) return;
                 
-                ulong steamId64 = removedDeathrunPlayer.Client.SteamId;
-                var livesNum = removedDeathrunPlayer.LivesSystem.GetLivesNum;
+                    var livesNum = removedDeathrunPlayer.LivesSystem.GetLivesNum;
+                    
+                    await SaveLivesToDatabase(steamId64, livesNum);
+                });
+            }
+            
+            //save economy data to the database if we've set the EnableEconomySystem to true
+            if (EconomyManager.EconomySystemConfig.EnableEconomySystem is true)
+            {
+                Task.Run(async () =>
+                {
+                    if (removedDeathrunPlayer.EconomySystem is null) return;
                 
-                Task.Run(() => SaveLivesToDatabase(steamId64, livesNum));
+                    var creditsNum = removedDeathrunPlayer.EconomySystem.Credits;
+                    
+                    await SaveCreditsToDatabase(steamId64, creditsNum);
+                });
             }
         }
     }
@@ -347,6 +376,93 @@ internal class PlayersManager(
         return false;
     }
 
+    private static async Task SaveCreditsToDatabase(ulong steamId64, int newCreditsNum)
+    {
+        try
+        {
+            await using var connection = new MySqlConnection(EconomyManager.ConnectionString);
+            await connection.OpenAsync();
+            
+            var insertUpdateLivesQuery 
+                = $@" INSERT INTO `{(EconomyManager.EconomySystemConfig?.TableName ?? "deathrun_economy")}` 
+                      ( steamid64, `credits` )  
+                      VALUES 
+                      ( @SteamId64, @NewCredits ) 
+                      ON DUPLICATE KEY UPDATE 
+                                       `credits`  = '{newCreditsNum}'
+                    ";
+    
+            await connection.ExecuteAsync(insertUpdateLivesQuery,
+                new {
+                            SteamId64        = steamId64, 
+                            NewCredits       = newCreditsNum
+                          });
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+        }
+        
+    }
+    
+    private static async Task<int> GetSavedCredits(ulong steamId64)
+    {
+        try
+        {
+            await using var connection = new MySqlConnection(EconomyManager.ConnectionString);
+            await connection.OpenAsync();
+    
+            //fast check if the player has saved economy data
+            var hasSavedEconomyData = await HasSavedEconomyData(steamId64);
+            if (hasSavedEconomyData is not true) return 0;
+            
+            //take the lives num from the database
+            var creditsNum = await connection.QueryFirstOrDefaultAsync<int>
+            ($@"SELECT
+                       `credits`
+                    FROM `{(EconomyManager.EconomySystemConfig?.TableName ?? "deathrun_economy")}`
+                    WHERE steamid64 = @SteamId64
+                 ",
+                new { SteamId64 = steamId64 }
+            
+            );
+            
+            return creditsNum;
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+        }
+        
+        return 0;
+    }
+
+    private static async Task<bool> HasSavedEconomyData(ulong steamId64)
+    {
+        try
+        {
+            await using var connection = new MySqlConnection(EconomyManager.ConnectionString);
+            await connection.OpenAsync();
+    
+            var hasSavedCreditsData 
+                = await connection.QueryFirstOrDefaultAsync<bool>
+                                    ($@"SELECT EXISTS(SELECT 1 FROM `{(EconomyManager.EconomySystemConfig?.TableName ?? "deathrun_economy")}`
+                                            WHERE steamid64 = @SteamId64 LIMIT 1)
+                                         ",
+                                        new { SteamId64 = steamId64 }
+                                    
+                                    );
+            
+            return hasSavedCreditsData;
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+        }
+        
+        return false;
+    }
+    
     #endregion
     
     #region DeathrunPlayer
