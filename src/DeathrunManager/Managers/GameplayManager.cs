@@ -532,36 +532,26 @@ public class GameplayManager(
         //game teams unstuck logic
         modSharp.PushTimer(() =>
         {
-            //skip if we are already ending the round
-            if (GetRoundState() >= DRoundState.EndPre
-                || GetRoundState() is >= DRoundState.PickingGameMaster) return;
+            //skip if we are picking a game master
+            if ((GetRoundState() is DRoundState.PickingGameMaster or DRoundState.PickedGameMaster)
+                || GetRoundState() is DRoundState.EndPre or DRoundState.EndPost) return;
             
-            var validDeathrunPlayers 
+            //gather all players that are bots and alive
+            var aliveBotDeathrunPlayers 
                 = playersManager
-                    .GetAllAliveDeathrunPlayers().FilterPlayers(deathrunPlayer => deathrunPlayer.Controller?.Team 
-                                                                                  is not CStrikeTeam.Spectator 
-                                                                                  and CStrikeTeam.UnAssigned);
-
-            if (validDeathrunPlayers.Count is 0 or 1) return;
+                    .GetAllAliveDeathrunPlayers().FilterPlayers(deathrunPlayer => deathrunPlayer.IsValidAndAlive
+                                                                                  && deathrunPlayer.Client.SteamId == 0);
+            //gather all players that are real players and alive
+            var aliveRealDeathrunPlayers 
+                = playersManager
+                    .GetAllAliveDeathrunPlayers().FilterPlayers(deathrunPlayer => deathrunPlayer.IsValidAndAlive
+                                                                                  && deathrunPlayer.Client.SteamId != 0);
             
-            var hasTSidePlayer = false;
-
-            foreach (var validDeathrunPlayer in validDeathrunPlayers)
-            {
-                if (validDeathrunPlayer.Controller?.Team is CStrikeTeam.TE)
-                {
-                    hasTSidePlayer = true;
-                    break;
-                }
-            }
-
-            if (hasTSidePlayer is not true)
-            {
-                modSharp.ServerCommand("bot_add t");
-                modSharp.ServerCommand("bot_kick t");
-            }
-
-            _deathrunRoundState = DRoundState.Unset;
+            //skip terminating the round if there is one alive real player and one live bot
+            if (aliveRealDeathrunPlayers.Count is 1 && aliveBotDeathrunPlayers.Count is 1) return;
+            
+            //terminate the round
+            modSharp.GetGameRules().TerminateRound(3, RoundEndReason.RoundDraw);
 
         }, 5f, GameTimerFlags.Repeatable | GameTimerFlags.StopOnMapEnd);
     }
