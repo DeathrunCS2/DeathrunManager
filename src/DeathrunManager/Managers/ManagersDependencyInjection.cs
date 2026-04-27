@@ -25,6 +25,7 @@ internal static class ManagersDependencyInjection
     {
         //internal managers
         services.AddSingleton<IManager, ILivesSystemManager, LivesSystemManager>();
+        services.AddSingleton<IManager, IEconomyManager, EconomyManager>();
         
         //exposed managers
         services.AddSingleton<IManager, IPlayersManager, PlayersManager>();
