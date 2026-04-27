@@ -67,6 +67,22 @@ public interface IDeathrunPlayer
     ILivesSystem? LivesSystem { get; }
 
     /// <summary>
+    /// Initializes the economy system for the player.
+    /// This method sets up a new instance of the economy system associated with the player,
+    /// ensuring it is properly configured and ready for use during gameplay.
+    /// </summary>
+    /// <returns>Returns true if the economy system is successfully initialized; otherwise, false.</returns>
+    bool InitEconomySystem();
+
+    /// <summary>
+    /// Represents the economy system associated with the player.
+    /// This system manages the player's credits, providing functionality to
+    /// add, deduct, or reset credits, as well as generate visual representations
+    /// of the player's current credit balance.
+    /// </summary>
+    IEconomySystem? EconomySystem { get; }
+
+    /// <summary>
     /// Gets a value indicating whether the player's controller and player pawn are valid entities and the player is currently connected.
     /// The property returns true if all related components required to represent a functioning player are in a valid state.
     /// Otherwise, it returns false.

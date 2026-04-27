@@ -28,6 +28,15 @@ public class DeathrunPlayer : IDeathrunPlayer
                Console.WriteLine("[DeathrunPlayer][InitLivesSystem] Failed to initialize lives system for player {0}!", Client.SteamId);
             }
         }
+        
+        //try initializing the economy system if we've enabled it in the config
+        if (EconomyManager.EconomySystemConfig?.EnableEconomySystem is true)
+        {
+            if (InitEconomySystem() is not true)
+            {
+                Console.WriteLine("[DeathrunPlayer][InitEconomySystem] Failed to initialize economy for player {0}!", Client.SteamId);
+            }
+        }
     }
     
     #region DeathrunPlayer
@@ -45,6 +54,12 @@ public class DeathrunPlayer : IDeathrunPlayer
         return LivesSystem is not null;
     }
     public ILivesSystem? LivesSystem { get; private set; }
+    public bool InitEconomySystem()
+    {
+        EconomySystem = new EconomySystem(this);
+        return EconomySystem is not null;
+    }
+    public IEconomySystem? EconomySystem { get; private set; }
     public bool IsValid => Controller?.IsValidEntity is true && PlayerPawn?.IsValidEntity is true && Controller.IsConnected() is true;
     public bool IsValidAndAlive => IsValid is true && PlayerPawn?.IsAlive is true;
     public bool SkipNextGameMasterPickUp { get; set; } = false;
