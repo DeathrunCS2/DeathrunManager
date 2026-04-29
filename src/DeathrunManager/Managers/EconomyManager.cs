@@ -4,19 +4,24 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Dapper;
 using DeathrunManager.Interfaces.Managers;
+using DeathrunManager.Interfaces.Managers.Native;
 using DeathrunManager.Shared.Enums;
 using DeathrunManager.Shared.Managers;
 using Microsoft.Extensions.Logging;
 using MySqlConnector;
+using Sharp.Shared.Enums;
 using Sharp.Shared.HookParams;
-using Sharp.Shared.Managers;
+using Sharp.Shared.Types;
+using IEventManager = DeathrunManager.Interfaces.Managers.Native.IEventManager;
+using IHookManager = Sharp.Shared.Managers.IHookManager;
 
 namespace DeathrunManager.Managers;
 
 internal class EconomyManager(
     ILogger<EconomyManager> logger,
     IHookManager hookManager,
-    IPlayersManager playersManager) : IEconomyManager
+    IPlayersManager playersManager,
+    IEventManager eventManager) : IEconomyManager
 {
     public static EconomySystemConfig EconomySystemConfig = null!;
     public static string ConnectionString { get; set; } = "";
@@ -35,7 +40,8 @@ internal class EconomyManager(
         }
         
         hookManager.PlayerKilledPost.InstallForward(PlayerKilledPost);
-        
+        eventManager.HookEvent("round_end", OnRoundEnd);
+
         //build connection string
         BuildDbConnectionString();
 
@@ -83,6 +89,23 @@ internal class EconomyManager(
             .SendChatMessage($"You've also received a {{GOLD}}{EconomySystemConfig.GameMasterKillCreditsBonusNum} {{DEFAULT}}credits bonus for killing a contestant!");
     }
 
+    private static HookReturnValue<bool> OnRoundEnd(EventHookParams evParms)
+    {
+        var winnerTeam = (CStrikeTeam)evParms.Event.GetInt("winner");
+        
+        foreach (var deathrunPlayer in PlayersManager.Instance.GetAllValidDeathrunPlayers())
+        {
+            if (deathrunPlayer.Controller?.Team != winnerTeam
+                || deathrunPlayer.Controller.Team is CStrikeTeam.Spectator) continue;
+            
+            deathrunPlayer.EconomySystem?.AddCreditsNum(EconomySystemConfig.RoundTeamWinCreditsNum);
+            deathrunPlayer
+                .SendChatMessage($"You've received {{GREEN}}{EconomySystemConfig.RoundTeamWinCreditsNum} {{DEFAULT}}credits for winning the round!");
+        }
+        
+        return default;
+    }
+    
     #endregion
     
     #region ConnectionString
@@ -168,6 +191,8 @@ public class EconomySystemConfig
     public int StartCreditsNum { get; init; } = 5;
     public int KillCreditsNum { get; init; } = 2;
     public int GameMasterKillCreditsBonusNum { get; init; } = 2;
+    public int RoundTeamWinCreditsNum { get; init; } = 1;
+    
     public bool ShowCreditsHud { get; init; } = true;
 
     
