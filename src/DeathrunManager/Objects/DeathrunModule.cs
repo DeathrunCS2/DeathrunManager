@@ -107,8 +107,8 @@ internal class DeathrunModule : IDeathrunModule
                                                                         config.PreferSharedTypes = true;
                                                                         config.IsLazyLoaded      = false;
                                                                         config.IsUnloadable      = true;
-                                                                        config.LoadInMemory      = true;
-                                                                        config.EnableHotReload   = true;
+                                                                        config.LoadInMemory      = false;
+                                                                        config.EnableHotReload   = false;
                                                                     });
         
             var assembly = moduleLoader.LoadDefaultAssembly();
