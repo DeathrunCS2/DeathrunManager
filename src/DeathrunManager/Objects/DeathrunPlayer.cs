@@ -213,8 +213,8 @@ public class DeathrunPlayer : IDeathrunPlayer
         //when `this`'s PlayerPawn is alive we print the center menu to self
         if (IsValidAndAlive)
         {
-            if (LivesSystem is not null && EconomySystem is not null)
-                SetCenterMenuBottomRowHtml(LivesSystem.GetLivesCounterHtmlString() + EconomySystem.GetCreditsNumHtmlString());
+            // if (LivesSystem is not null && EconomySystem is not null)
+            //     SetCenterMenuBottomRowHtml(LivesSystem.GetLivesCounterHtmlString() + EconomySystem.GetCreditsNumHtmlString());
             
             PrintToCenterHtml
             (
@@ -244,9 +244,9 @@ public class DeathrunPlayer : IDeathrunPlayer
             if (observedDeathrunPlayer != ObservedDeathrunPlayer)
                 ObservedDeathrunPlayer = observedDeathrunPlayer;
             
-            if (observedDeathrunPlayer.LivesSystem is not null && observedDeathrunPlayer.EconomySystem is not null)
-                SetCenterMenuBottomRowHtml(observedDeathrunPlayer.LivesSystem.GetLivesCounterHtmlString() + observedDeathrunPlayer.EconomySystem.GetCreditsNumHtmlString());
-            
+            // if (observedDeathrunPlayer.LivesSystem is not null && observedDeathrunPlayer.EconomySystem is not null)
+            //     SetCenterMenuBottomRowHtml(observedDeathrunPlayer.LivesSystem.GetLivesCounterHtmlString() + observedDeathrunPlayer.EconomySystem.GetCreditsNumHtmlString());
+            //
             PrintToCenterHtml
             (
                 $"<font class='fontSize-m stratum-font fontWeight-Bold' color='{(observedDeathrunPlayer?.Class is DPlayerClass.Contestant ? "#ADD8E6" : "#ffb09c")}'>[{observedDeathrunPlayer?.Client.Name}]</font><br/>"
