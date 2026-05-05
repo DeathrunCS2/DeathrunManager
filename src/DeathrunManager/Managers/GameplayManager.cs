@@ -552,7 +552,7 @@ public class GameplayManager(
             if (aliveRealDeathrunPlayers.Count >= 1) return;
             
             //skip terminating the round if there is one alive real player and one live bot
-            if (aliveRealDeathrunPlayers.Count is 1 && aliveBotDeathrunPlayers.Count is 1) return;
+            if (aliveRealDeathrunPlayers.Count is 0 && aliveBotDeathrunPlayers.Count >= 1) return;
             
             //terminate the round
             modSharp.GetGameRules().TerminateRound(3, RoundEndReason.RoundDraw);
