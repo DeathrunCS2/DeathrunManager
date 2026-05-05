@@ -16,6 +16,9 @@ public class DeathrunPlayer : IDeathrunPlayer
 {
     public DeathrunPlayer(IGameClient client)
     {
+        ObjectDisposedException
+            .ThrowIf(client.IsDisposed || client?.IsValid is not true, this);
+        
         Client = client;
         
         StartPlayerThink();
