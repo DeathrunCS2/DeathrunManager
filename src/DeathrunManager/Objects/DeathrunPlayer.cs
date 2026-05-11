@@ -45,9 +45,9 @@ public class DeathrunPlayer : IDeathrunPlayer
     #region DeathrunPlayer
 
     public IGameClient Client { get; }
-    public IPlayerController? Controller => Client.GetPlayerController();
-    public IPlayerPawn? PlayerPawn => Client.GetPlayerController()?.GetPlayerPawn();
-    public IObserverService? ObserverPawnService => Client.GetPlayerController()?.GetObserverPawn()?.GetObserverService();
+    public IPlayerController? Controller => Client.IsDisposed is not true ? Client.GetPlayerController() : null;
+    public IPlayerPawn? PlayerPawn => Client.IsDisposed is not true ? Client.GetPlayerController()?.GetPlayerPawn() : null;
+    public IObserverService? ObserverPawnService => Client.IsDisposed is not true ? Client.GetPlayerController()?.GetObserverPawn()?.GetObserverService() : null;
     public IDeathrunPlayer? ObservedDeathrunPlayer { get; private set; }
     
     public DPlayerClass Class { get; set; } = DPlayerClass.Contestant;
