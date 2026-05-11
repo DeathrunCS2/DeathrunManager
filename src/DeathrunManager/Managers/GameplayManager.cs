@@ -550,13 +550,20 @@ public class GameplayManager(
                                                                                   && deathrunPlayer.Client.SteamId != 0);
             //skip terminating the round if there is one or more alive real player
             if (aliveRealDeathrunPlayers.Count >= 1) return;
-            
-            //skip terminating the round if there is one alive real player and one live bot
-            if (aliveRealDeathrunPlayers.Count is 0 && aliveBotDeathrunPlayers.Count >= 1) return;
-            
-            //terminate the round
-            modSharp.GetGameRules().TerminateRound(3, RoundEndReason.RoundDraw);
 
+            switch (aliveRealDeathrunPlayers.Count)
+            {
+                //skip terminating the round if there is one live real player and at least one live bot
+                case 1 when aliveBotDeathrunPlayers.Count >= 1:
+                //skip terminating the round if there are only live bots
+                case 0 when aliveBotDeathrunPlayers.Count >= 1:
+                    return;
+                default:
+                    //terminate the round
+                    modSharp.GetGameRules().TerminateRound(3, RoundEndReason.RoundDraw);
+                    break;
+            }
+            
         }, 5f, GameTimerFlags.Repeatable | GameTimerFlags.StopOnMapEnd);
     }
     
