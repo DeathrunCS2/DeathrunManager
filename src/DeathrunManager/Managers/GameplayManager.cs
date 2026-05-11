@@ -155,6 +155,8 @@ public class GameplayManager(
         if (deathrunPlayer != GetGameMaster())
             deathrunPlayer.ChangeClass(DPlayerClass.Contestant);
         
+        deathrunPlayer.RenderDeathrunHud = true;
+        
         modSharp.PushTimer(() =>
         {
             if (deathrunPlayer?.IsValidAndAlive is not true) return;
