@@ -187,15 +187,12 @@ public class GameplayManager(
 
         var attackerDPlayer = playersManager.GetDeathrunPlayer(parms.AttackerPawnHandle);
         if (attackerDPlayer is null) return;
-
-        var attackerDPlayerWeaponEntity = entityManager.FindEntityByHandle(parms.AbilityHandle);
-        if (attackerDPlayerWeaponEntity?.IsValidEntity is not true) return;
         
-        DeathrunPlayerKilled?.Invoke(victimDPlayer, 
-                                   attackerDPlayer, 
-                                   attackerDPlayerWeaponEntity, 
-                                   parms.DamageTaken, 
-                                   parms.Damage);
+        var attackerDPlayerWeaponEntity = entityManager.FindEntityByHandle(parms.AbilityHandle);
+        
+        DeathrunPlayerKilled?.Invoke(victimDPlayer, attackerDPlayer, 
+                                     attackerDPlayerWeaponEntity?.IsValidEntity is not true ? null : attackerDPlayerWeaponEntity, 
+                                     parms.DamageTaken, parms.Damage);
     }
 
     #endregion

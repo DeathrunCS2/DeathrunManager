@@ -12,7 +12,7 @@ public interface IGameplayManager
     delegate void DeathrunPlayerSpawnPostDelegate(IDeathrunPlayer deathrunPlayer);
     delegate void DeathrunPlayerDeathPostDelegate(IDeathrunPlayer victimDPlayer,
                                                   IDeathrunPlayer attackerDPlayer,
-                                                  IBaseEntity attackerWeaponEntity,
+                                                  IBaseEntity? attackerWeaponEntity,
                                                   float damageTaken, float damageTotal);
     delegate void RoundStartDelegate();
     delegate void RoundEndDelegate();
