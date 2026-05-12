@@ -252,7 +252,9 @@ public class DeathrunPlayer : IDeathrunPlayer
             //
             PrintToCenterHtml
             (
-                $"<font class='fontSize-m stratum-font fontWeight-Bold' color='{(observedDeathrunPlayer?.Class is DPlayerClass.Contestant ? "#ADD8E6" : "#ffb09c")}'>[{observedDeathrunPlayer?.Client.Name}]</font><br/>"
+                $"<font class='fontSize-m stratum-font fontWeight-Bold' color='{(observedDeathrunPlayer?.Class is DPlayerClass.Contestant ? "#ADD8E6" : "#ffb09c")}'>"
+                + $"[{observedDeathrunPlayer?.Client.Name}]"
+                + $"</font>"
                 + ( _topRowHtml       is not null       ? _topRowHtml     + "<br/>" : "") 
                 + (_middleRowHtml     is not null       ? _middleRowHtml  + "<br/>" : "") 
                 + _bottomRowHtml      ?? ""
