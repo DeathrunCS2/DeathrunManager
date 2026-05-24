@@ -7,7 +7,8 @@ using MySqlConnector;
 
 namespace DeathrunManager.Managers;
 
-public class DatabaseManager(Logger<DatabaseManager> logger) : IManager, IDatabaseManager
+public class DatabaseManager(
+    ILogger<DatabaseManager> logger) : IManager, IDatabaseManager
 {
     private static DatabaseConfig? DatabaseConfig { get; set;  }
     public string? ConnectionString { get; private set; } = null;
@@ -18,7 +19,7 @@ public class DatabaseManager(Logger<DatabaseManager> logger) : IManager, IDataba
     {
         //load database config
         DatabaseConfig = LoadConfig();
-        if (DatabaseConfig.Database is "database_name") logger.LogWarning("Database Config is not set! Features based on database will be inactive!");
+        if (DatabaseConfig.Database is "database_name") logger.LogWarning("Configure database connection details from database.json config file first!");
         
         //cache connection string
         ConnectionString = new MySqlConnectionStringBuilder
