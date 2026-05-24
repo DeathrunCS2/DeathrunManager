@@ -23,14 +23,16 @@ internal static class ManagersDependencyInjection
     
     public static IServiceCollection AddDeathrunManagers(this IServiceCollection services)
     {
+        //exposed managers
+        services.AddSingleton<IManager, IDatabaseManager, DatabaseManager>();
+        services.AddSingleton<IManager, IPlayersManager, PlayersManager>();
+        services.AddSingleton<IManager, IGameplayManager, GameplayManager>();
+        //managers repo
+        services.AddSingleton<IManager, IDeathrunManagers, DeathrunManagers>();
+        
         //internal managers
         services.AddSingleton<IManager, ILivesSystemManager, LivesSystemManager>();
         services.AddSingleton<IManager, IEconomyManager, EconomyManager>();
-        
-        //exposed managers
-        services.AddSingleton<IManager, IPlayersManager, PlayersManager>();
-        services.AddSingleton<IManager, IGameplayManager, GameplayManager>();
-        services.AddSingleton<IManager, IDeathrunManagers, DeathrunManagers>();
         
         return services;
     }

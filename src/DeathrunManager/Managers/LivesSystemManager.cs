@@ -1,6 +1,5 @@
 ﻿using System;
 using System.IO;
-using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Dapper;
@@ -20,10 +19,10 @@ internal class LivesSystemManager(
     ILogger<LivesSystemManager> logger,
     IHookManager hookManager,
     IClientManager clientManager,
-    IPlayersManager playersManager) : ILivesSystemManager
+    IPlayersManager playersManager,
+    IDatabaseManager databaseManager) : ILivesSystemManager
 {
     public static LivesSystemConfig? LivesSystemConfig = null;
-    public static string ConnectionString { get; set; } = "";
     
     #region IModule
     
@@ -47,9 +46,6 @@ internal class LivesSystemManager(
             logger.LogWarning("[LivesSystem] {0}!", "Saving Lives to Database is disabled! Default to saving to current game session");
             return true;
         }
-        
-        //build connection string
-        BuildDbConnectionString();
 
         //create the necessary db tables
         SetupDatabaseTables();
@@ -106,28 +102,9 @@ internal class LivesSystemManager(
     
     #endregion
     
-    #region ConnectionString
-
-    private static void BuildDbConnectionString() 
-    {
-        if (LivesSystemConfig is null) return;
-        
-        //build connection string
-        ConnectionString = new MySqlConnectionStringBuilder
-        {
-            Database = LivesSystemConfig.Database,
-            UserID = LivesSystemConfig.User,
-            Password = LivesSystemConfig.Password,
-            Server = LivesSystemConfig.Host,
-            Port = (uint)LivesSystemConfig.Port,
-        }.ConnectionString;
-    }
-
-    #endregion
-    
     #region Tables
 
-    private static void SetupDatabaseTables()
+    private void SetupDatabaseTables()
     {
         if (LivesSystemConfig is null) return;
         
@@ -141,11 +118,11 @@ internal class LivesSystemManager(
                                                )"));
     }
     
-    private static async Task CreateDatabaseTable(string databaseTableStringStructure)
+    private async Task CreateDatabaseTable(string databaseTableStringStructure)
     {
         try
         {
-            await using var dbConnection = new MySqlConnection(ConnectionString);
+            await using var dbConnection = new MySqlConnection(databaseManager.ConnectionString);
             dbConnection.Open();
             
             await dbConnection.ExecuteAsync(databaseTableStringStructure);
@@ -192,18 +169,9 @@ public class LivesSystemConfig
     public bool EnableLivesSystem { get; init; } = false;
     public int StartLivesNum { get; init; } = 1;
     public bool ShowLivesCounter { get; init; } = true;
-
     public bool SaveLivesToDatabase { get; init; } = false;
-    
-    public string Spacer { get; init; } = "// If SaveLivesToDatabase is true, you have to configure the database connection details below too.";
-    
-    public string Host { get; init; } = "localhost";
-    public string Database { get; init; } = "database_name";
-    public string User { get; init; } = "database_user";
-    public string Password { get; init; } = "database_password";
-    public int Port { get; init; } = 3306;
+    public string Spacer { get; init; } = "// If SaveLivesToDatabase is true, you have to configure the database.json details too.";
     public string TableName { get; init; } = "deathrun_players";
-    
 }
 
 

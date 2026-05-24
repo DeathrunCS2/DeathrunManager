@@ -21,10 +21,10 @@ internal class EconomyManager(
     ILogger<EconomyManager> logger,
     IHookManager hookManager,
     IPlayersManager playersManager,
-    IEventManager eventManager) : IEconomyManager
+    IEventManager eventManager,
+    IDatabaseManager databaseManager) : IEconomyManager
 {
     public static EconomySystemConfig EconomySystemConfig = null!;
-    public static string ConnectionString { get; set; } = "";
     
     #region IModule
     
@@ -41,9 +41,6 @@ internal class EconomyManager(
         
         hookManager.PlayerKilledPost.InstallForward(PlayerKilledPost);
         eventManager.HookEvent("round_end", OnRoundEnd);
-
-        //build connection string
-        BuildDbConnectionString();
 
         //create the necessary db tables
         SetupDatabaseTables();
@@ -108,26 +105,9 @@ internal class EconomyManager(
     
     #endregion
     
-    #region ConnectionString
-
-    private static void BuildDbConnectionString() 
-    {
-        //build connection string
-        ConnectionString = new MySqlConnectionStringBuilder
-        {
-            Database = EconomySystemConfig.Database,
-            UserID = EconomySystemConfig.User,
-            Password = EconomySystemConfig.Password,
-            Server = EconomySystemConfig.Host,
-            Port = (uint)EconomySystemConfig.Port,
-        }.ConnectionString;
-    }
-
-    #endregion
-    
     #region Tables
 
-    private static void SetupDatabaseTables()
+    private void SetupDatabaseTables()
     {
         Task.Run(() => CreateDatabaseTable($@" CREATE TABLE IF NOT EXISTS `{EconomySystemConfig.TableName}` 
                                                (
@@ -139,11 +119,11 @@ internal class EconomyManager(
                                                )"));
     }
     
-    private static async Task CreateDatabaseTable(string databaseTableStringStructure)
+    private async Task CreateDatabaseTable(string databaseTableStringStructure)
     {
         try
         {
-            await using var dbConnection = new MySqlConnection(ConnectionString);
+            await using var dbConnection = new MySqlConnection(databaseManager.ConnectionString);
             dbConnection.Open();
             
             await dbConnection.ExecuteAsync(databaseTableStringStructure);
@@ -192,19 +172,10 @@ public class EconomySystemConfig
     public int KillCreditsNum { get; init; } = 2;
     public int GameMasterKillCreditsBonusNum { get; init; } = 2;
     public int RoundTeamWinCreditsNum { get; init; } = 1;
-    
     public bool ShowCreditsHud { get; init; } = true;
-
     
-    public string Spacer { get; init; } = "// If EnableEconomySystem is true, you have to configure the database connection details below too.";
-    
-    public string Host { get; init; } = "localhost";
-    public string Database { get; init; } = "database_name";
-    public string User { get; init; } = "database_user";
-    public string Password { get; init; } = "database_password";
-    public int Port { get; init; } = 3306;
+    public string Spacer { get; init; } = "// If EnableEconomySystem is true, you have to configure the database.json details too.";
     public string TableName { get; init; } = "deathrun_economy";
-    
 }
 
 

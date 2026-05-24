@@ -27,7 +27,8 @@ namespace DeathrunManager.Managers;
 internal class PlayersManager(
     IModSharp modSharp,
     IClientManager clientManager,
-    ManagerBaseConfig baseConfig) : IManager, IPlayersManager, IClientListener
+    ManagerBaseConfig baseConfig,
+    IDatabaseManager databaseManager) : IManager, IPlayersManager, IClientListener
 {
     public static PlayersManager Instance = null!;
 
@@ -289,12 +290,12 @@ internal class PlayersManager(
     
     #region DeathrunPlayer Async
 
-    private static async Task SaveLivesToDatabase(ulong steamId64, int newLivesNum)
+    private async Task SaveLivesToDatabase(ulong steamId64, int newLivesNum)
     {
         try
         {
-            await using var connection = new MySqlConnection(LivesSystemManager.ConnectionString);
-            await connection.OpenAsync();
+            await using var connection = new MySqlConnection(databaseManager.ConnectionString);
+            connection.Open();
             
             var insertUpdateLivesQuery 
                 = $@" INSERT INTO `{(LivesSystemManager.LivesSystemConfig?.TableName ?? "deathrun_players")}` 
@@ -318,12 +319,12 @@ internal class PlayersManager(
         
     }
     
-    private static async Task<int> GetSavedLives(ulong steamId64)
+    private async Task<int> GetSavedLives(ulong steamId64)
     {
         try
         {
-            await using var connection = new MySqlConnection(LivesSystemManager.ConnectionString);
-            await connection.OpenAsync();
+            await using var connection = new MySqlConnection(databaseManager.ConnectionString);
+            connection.Open();
     
             //fast check if the player has saved lives data
             var hasSavedLivesData = await HasSavedLivesData(steamId64);
@@ -350,12 +351,12 @@ internal class PlayersManager(
         return 0;
     }
 
-    private static async Task<bool> HasSavedLivesData(ulong steamId64)
+    private async Task<bool> HasSavedLivesData(ulong steamId64)
     {
         try
         {
-            await using var connection = new MySqlConnection(LivesSystemManager.ConnectionString);
-            await connection.OpenAsync();
+            await using var connection = new MySqlConnection(databaseManager.ConnectionString);
+            connection.Open();
     
             var hasSavedLivesData 
                 = await connection.QueryFirstOrDefaultAsync<bool>
@@ -376,12 +377,12 @@ internal class PlayersManager(
         return false;
     }
 
-    private static async Task SaveCreditsToDatabase(ulong steamId64, int newCreditsNum)
+    private async Task SaveCreditsToDatabase(ulong steamId64, int newCreditsNum)
     {
         try
         {
-            await using var connection = new MySqlConnection(EconomyManager.ConnectionString);
-            await connection.OpenAsync();
+            await using var connection = new MySqlConnection(databaseManager.ConnectionString);
+            connection.Open();
             
             var insertUpdateLivesQuery 
                 = $@" INSERT INTO `{(EconomyManager.EconomySystemConfig?.TableName ?? "deathrun_economy")}` 
@@ -405,12 +406,12 @@ internal class PlayersManager(
         
     }
     
-    private static async Task<int> GetSavedCredits(ulong steamId64)
+    private async Task<int> GetSavedCredits(ulong steamId64)
     {
         try
         {
-            await using var connection = new MySqlConnection(EconomyManager.ConnectionString);
-            await connection.OpenAsync();
+            await using var connection = new MySqlConnection(databaseManager.ConnectionString);
+            connection.Open();
     
             //fast check if the player has saved economy data
             var hasSavedEconomyData = await HasSavedEconomyData(steamId64);
@@ -437,12 +438,12 @@ internal class PlayersManager(
         return 0;
     }
 
-    private static async Task<bool> HasSavedEconomyData(ulong steamId64)
+    private async Task<bool> HasSavedEconomyData(ulong steamId64)
     {
         try
         {
-            await using var connection = new MySqlConnection(EconomyManager.ConnectionString);
-            await connection.OpenAsync();
+            await using var connection = new MySqlConnection(databaseManager.ConnectionString);
+            connection.Open();
     
             var hasSavedCreditsData 
                 = await connection.QueryFirstOrDefaultAsync<bool>
