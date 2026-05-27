@@ -28,7 +28,7 @@ public class DeathrunManager : IModSharpModule, IDeathrunManager
     private ModulesManager?                              _modulesManager;
     
     private ISharedSystem                                SharedSystem                        { get; }
-    private static IDeathrunManager?                     _instance                           = null;                    
+    public static IDeathrunManager?                      Instance                            { get; private set; } = null;
     public static IServiceProvider?                      ServiceProvider                     { get; private set; }
     
     public static InterfaceBridge                        Bridge                              { get; private set; } = null!;
@@ -42,7 +42,7 @@ public class DeathrunManager : IModSharpModule, IDeathrunManager
         IConfiguration           coreConfiguration,
         bool                     hotReload)
     {
-        _instance = this;
+        Instance = this;
         Bridge = new InterfaceBridge(dllPath, sharpPath, version, sharedSystem);
         SharedSystem = sharedSystem;
 
@@ -97,7 +97,7 @@ public class DeathrunManager : IModSharpModule, IDeathrunManager
         CallPostInitManagers();
         
         //expose shared interface
-        Bridge.SharpModuleManager.RegisterSharpModuleInterface<IDeathrunManager>(this, _instance?.Identity ?? "DeathrunManager.Shared", this);
+        Bridge.SharpModuleManager.RegisterSharpModuleInterface<IDeathrunManager>(this, IDeathrunManager.Identity, this);
     }
     
     public void OnAllModulesLoaded()

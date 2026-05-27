@@ -17,7 +17,7 @@ public interface IDeathrunManager
     /// for purposes such as registration, discovery, or logging.
     /// The returned value is derived from the fully qualified name of the interface or its name if the full name is null.
     /// </remarks>
-    string Identity => typeof(IDeathrunManager).FullName ?? nameof(IDeathrunManager);
+    static string Identity => typeof(IDeathrunManager).FullName ?? nameof(IDeathrunManager);
 
     /// <summary>
     /// Provides an instance of the <see cref="IDeathrunManager"/> implementation.
