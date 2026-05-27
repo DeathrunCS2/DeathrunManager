@@ -7,19 +7,6 @@ namespace DeathrunManager.Shared.Managers;
 public interface IDeathrunManagers
 {
     /// <summary>
-    /// Provides access to the database management functionality within the Deathrun manager.
-    /// </summary>
-    /// <remarks>
-    /// The DatabaseManager property facilitates database-related operations such as interacting
-    /// with the underlying database connection and accessing database-specific features utilized
-    /// in the Deathrun game system.
-    /// </remarks>
-    /// <value>
-    /// An instance implementing the <see cref="IDatabaseManager"/> interface.
-    /// </value>
-    IDatabaseManager DatabaseManager { get; }
-    
-    /// <summary>
     /// Provides access to the deathrun players management system in the Deathrun manager.
     /// </summary>
     /// <remarks>

@@ -11,8 +11,6 @@ internal class DeathrunManagers(
     IGameplayManager gameplayManager,
     IDatabaseManager databaseManager) : IManager, IDeathrunManagers
 {
-    public IDatabaseManager DatabaseManager => databaseManager;
-    
     public IPlayersManager PlayersManager => playersManager;
     
     public IGameplayManager GameplayManager => gameplayManager;
