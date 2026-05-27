@@ -11,7 +11,7 @@ using DeathrunManager.Interfaces.Managers.Native;
 using DeathrunManager.Objects;
 using DeathrunManager.Shared.Enums;
 using DeathrunManager.Shared.Managers;
-using DeathrunManager.Shared.DeathrunObjects;
+using DeathrunManager.Shared.Objects;
 using Microsoft.Extensions.Logging;
 using Sharp.Shared;
 using Sharp.Shared.Enums;

@@ -1,8 +1,8 @@
 using System;
 using System.IO;
 using System.Linq;
-using DeathrunManager.Managers;
 using DeathrunManager.Shared;
+using DeathrunManager.Shared.Objects;
 using McMaster.NETCore.Plugins;
 using Microsoft.Extensions.DependencyInjection;
 

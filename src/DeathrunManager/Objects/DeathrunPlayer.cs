@@ -3,7 +3,7 @@ using DeathrunManager.Config;
 using DeathrunManager.Extensions;
 using DeathrunManager.Managers;
 using DeathrunManager.Shared.Enums;
-using DeathrunManager.Shared.DeathrunObjects;
+using DeathrunManager.Shared.Objects;
 using Sharp.Shared.Enums;
 using Sharp.Shared.GameEntities;
 using Sharp.Shared.GameObjects;

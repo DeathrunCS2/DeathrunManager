@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 using DeathrunManager.Shared.Enums;
-using DeathrunManager.Shared.DeathrunObjects;
+using DeathrunManager.Shared.Objects;
 using Sharp.Shared.GameEntities;
 using Sharp.Shared.Objects;
 using Sharp.Shared.Types;

@@ -1,5 +1,5 @@
 ﻿using DeathrunManager.Shared.Enums;
-using DeathrunManager.Shared.DeathrunObjects;
+using DeathrunManager.Shared.Objects;
 using Sharp.Shared.GameEntities;
 
 namespace DeathrunManager.Shared.Managers;

@@ -4,7 +4,7 @@ using Sharp.Shared.GameObjects;
 using Sharp.Shared.Objects;
 using Sharp.Shared.Types;
 
-namespace DeathrunManager.Shared.DeathrunObjects;
+namespace DeathrunManager.Shared.Objects;
 
 public interface IDeathrunPlayer
 {

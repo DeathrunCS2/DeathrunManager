@@ -1,6 +1,6 @@
 ﻿using System;
 using DeathrunManager.Shared.Config;
-using DeathrunManager.Shared.DeathrunObjects;
+using DeathrunManager.Shared.Objects;
 using DeathrunManager.Shared.Managers;
 
 namespace DeathrunManager.Shared;

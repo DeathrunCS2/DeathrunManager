@@ -1,4 +1,4 @@
-namespace DeathrunManager.Shared.DeathrunObjects;
+namespace DeathrunManager.Shared.Objects;
 
 public interface ILivesSystem
 {

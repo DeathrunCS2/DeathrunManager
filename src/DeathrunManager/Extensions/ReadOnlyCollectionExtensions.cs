@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using DeathrunManager.Managers;
-using DeathrunManager.Shared.DeathrunObjects;
+using DeathrunManager.Shared.Objects;
 
 namespace DeathrunManager.Extensions;
 

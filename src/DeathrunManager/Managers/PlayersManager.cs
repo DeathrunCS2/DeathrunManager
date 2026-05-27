@@ -10,7 +10,7 @@ using DeathrunManager.Interfaces.Managers;
 using DeathrunManager.Objects;
 using DeathrunManager.Shared.Enums;
 using DeathrunManager.Shared.Managers;
-using DeathrunManager.Shared.DeathrunObjects;
+using DeathrunManager.Shared.Objects;
 using MySqlConnector;
 using Sharp.Shared;
 using Sharp.Shared.Definition;

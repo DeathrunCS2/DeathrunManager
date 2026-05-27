@@ -1,4 +1,4 @@
-namespace DeathrunManager.Shared.DeathrunObjects;
+namespace DeathrunManager.Shared.Objects;
 
 /// <summary>
 /// Event args passed when a deathrun player sends a chat message.

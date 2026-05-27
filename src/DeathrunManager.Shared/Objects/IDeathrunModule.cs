@@ -1,7 +1,7 @@
 using DeathrunManager.Shared.Config;
 using DeathrunManager.Shared.Managers;
 
-namespace DeathrunManager.Shared;
+namespace DeathrunManager.Shared.Objects;
 
 public interface IDeathrunModule
 {
@@ -18,6 +18,8 @@ public interface IDeathrunModule
     /// <seealso cref="IDeathrunManagers"/>
     IDeathrunManager DeathrunManager { get; }
 
+    #region Identity
+    
     /// <summary>
     /// Gets the name of the Deathrun module.
     /// </summary>
@@ -36,6 +38,10 @@ public interface IDeathrunModule
     /// </remarks>
     string Author { get; }
 
+    #endregion
+    
+    #region Methods
+
     bool Init(bool hotReload);
 
     void PostInit(bool hotReload)
@@ -51,4 +57,12 @@ public interface IDeathrunModule
     }
     
     void Shutdown(bool hotReload);
+
+    #endregion
+    
+    #region Config 
+    
+    //
+    
+    #endregion
 }

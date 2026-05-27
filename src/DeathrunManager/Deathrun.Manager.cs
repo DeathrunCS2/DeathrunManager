@@ -7,7 +7,7 @@ using DeathrunManager.Managers;
 using DeathrunManager.Objects;
 using DeathrunManager.Shared;
 using DeathrunManager.Shared.Config;
-using DeathrunManager.Shared.DeathrunObjects;
+using DeathrunManager.Shared.Objects;
 using DeathrunManager.Shared.Managers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;

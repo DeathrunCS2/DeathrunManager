@@ -1,6 +1,6 @@
 using DeathrunManager.Managers;
 using DeathrunManager.Shared.Enums;
-using DeathrunManager.Shared.DeathrunObjects;
+using DeathrunManager.Shared.Objects;
 using Sharp.Shared.Enums;
 
 namespace DeathrunManager.Objects;
