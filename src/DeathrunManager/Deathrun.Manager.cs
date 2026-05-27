@@ -1,10 +1,13 @@
 using System;
 using System.IO;
+using System.Text.Json;
 using DeathrunManager.Config;
 using DeathrunManager.Interfaces.Managers;
 using DeathrunManager.Managers;
+using DeathrunManager.Objects;
 using DeathrunManager.Shared;
 using DeathrunManager.Shared.Config;
+using DeathrunManager.Shared.DeathrunObjects;
 using DeathrunManager.Shared.Managers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,15 +24,16 @@ public class DeathrunManager : IModSharpModule, IDeathrunManager
 
     private readonly ILogger<DeathrunManager>            _logger;
     private readonly ServiceProvider                     _serviceProvider;
-    private readonly ServiceCollection                   _services                     = new ();
+    private readonly ServiceCollection                   _services                           = new ();
     private ModulesManager?                              _modulesManager;
     
-    public ISharedSystem                                 SharedSystem                  { get; }
-    public static IDeathrunManager                       Instance =                    null!;                    
-    public static IServiceProvider?                      ServiceProvider               { get; private set; }
+    private ISharedSystem                                SharedSystem                        { get; }
+    private static IDeathrunManager?                     _instance                           = null;                    
+    public static IServiceProvider?                      ServiceProvider                     { get; private set; }
     
-#pragma warning disable CA2211
-    public static InterfaceBridge                        Bridge                        = null!;
+    public static InterfaceBridge                        Bridge                              { get; private set; } = null!;
+
+    public ICommonVars                                  CommonVars                           { get; }
     
     public DeathrunManager(ISharedSystem sharedSystem,
         string                   dllPath,
@@ -38,9 +42,14 @@ public class DeathrunManager : IModSharpModule, IDeathrunManager
         IConfiguration           coreConfiguration,
         bool                     hotReload)
     {
-        Instance = this;
+        _instance = this;
         Bridge = new InterfaceBridge(dllPath, sharpPath, version, sharedSystem);
         SharedSystem = sharedSystem;
+
+        CommonVars = new CommonVars(Path.GetFullPath(Path.Combine(sharpPath, "configs")), 
+                                    dllPath, 
+                                    sharpPath);
+        
         _logger = sharedSystem.GetLoggerFactory().CreateLogger<DeathrunManager>();
         
         var configuration = new ConfigurationBuilder()
@@ -57,6 +66,7 @@ public class DeathrunManager : IModSharpModule, IDeathrunManager
         _services.AddSingleton(Bridge.SharpModuleManager);
         _services.AddSingleton(Bridge.ConVarManager);
         _services.AddSingleton(Bridge.LoggerFactory);
+        _services.AddSingleton(CommonVars);
         _services.AddSingleton(sharedSystem);
         _services.AddSingleton<IConfiguration>(configuration);
         _services.TryAdd(ServiceDescriptor.Singleton(typeof(ILogger<>), typeof(Logger<>)));
@@ -87,7 +97,7 @@ public class DeathrunManager : IModSharpModule, IDeathrunManager
         CallPostInitManagers();
         
         //expose shared interface
-        Bridge.SharpModuleManager.RegisterSharpModuleInterface<IDeathrunManager>(this, IDeathrunManager.Identity, this);
+        Bridge.SharpModuleManager.RegisterSharpModuleInterface<IDeathrunManager>(this, _instance?.Identity ?? "DeathrunManager.Shared", this);
     }
     
     public void OnAllModulesLoaded()

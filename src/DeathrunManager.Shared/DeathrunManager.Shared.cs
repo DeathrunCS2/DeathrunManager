@@ -1,5 +1,6 @@
 ﻿using System;
 using DeathrunManager.Shared.Config;
+using DeathrunManager.Shared.DeathrunObjects;
 using DeathrunManager.Shared.Managers;
 
 namespace DeathrunManager.Shared;
@@ -16,7 +17,7 @@ public interface IDeathrunManager
     /// for purposes such as registration, discovery, or logging.
     /// The returned value is derived from the fully qualified name of the interface or its name if the full name is null.
     /// </remarks>
-    static string Identity => typeof(IDeathrunManager).FullName ?? nameof(IDeathrunManager);
+    string Identity => typeof(IDeathrunManager).FullName ?? nameof(IDeathrunManager);
 
     /// <summary>
     /// Provides an instance of the <see cref="IDeathrunManager"/> implementation.
@@ -43,7 +44,7 @@ public interface IDeathrunManager
     /// The exact behavior and values of these configurations are determined by the implementation of the
     /// <see cref="IManagerBaseConfig"/> interface.
     /// </remarks>
-    public IManagerBaseConfig Config { get; }
+    IManagerBaseConfig Config { get; }
 
     /// <summary>
     /// Provides access to various subsystem managers within the <see cref="IDeathrunManager"/> interface.
@@ -53,5 +54,16 @@ public interface IDeathrunManager
     /// such as player management, gameplay rules, administrative controls, and menu handling. These managers
     /// facilitate modular and organized interactions within the deathrun environment.
     /// </remarks>
-    public IDeathrunManagers Managers { get; }
+    IDeathrunManagers Managers { get; }
+
+    /// <summary>
+    /// Provides access to the shared variables required by the deathrun manager system.
+    /// </summary>
+    /// <remarks>
+    /// This property encapsulates a set of variables that are frequently used across different
+    /// components of the deathrun manager system. These variables include, but are not limited to,
+    /// paths for configurations, shared libraries, and other common settings.
+    /// The implementation is supplied as an instance of <see cref="ICommonVars"/>.
+    /// </remarks>
+    ICommonVars CommonVars { get; }
 }
