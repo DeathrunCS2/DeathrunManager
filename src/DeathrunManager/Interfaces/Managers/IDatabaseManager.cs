@@ -1,4 +1,4 @@
-﻿namespace DeathrunManager.Shared.Managers;
+﻿namespace DeathrunManager.Interfaces.Managers;
 
 public interface IDatabaseManager
 {

@@ -1,7 +1,6 @@
 ﻿using System.IO;
 using System.Text.Json;
 using DeathrunManager.Interfaces.Managers;
-using DeathrunManager.Shared.Managers;
 using Microsoft.Extensions.Logging;
 using MySqlConnector;
 
