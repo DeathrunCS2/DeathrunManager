@@ -18,7 +18,7 @@ public interface IDeathrunModule
     /// <seealso cref="IDeathrunManagers"/>
     IDeathrunManager DeathrunManager { get; }
 
-    #region Identity
+    #region Deathrun Module
     
     /// <summary>
     /// Gets the name of the Deathrun module.
@@ -58,11 +58,5 @@ public interface IDeathrunModule
     
     void Shutdown(bool hotReload);
 
-    #endregion
-    
-    #region Config 
-    
-    //
-    
     #endregion
 }
