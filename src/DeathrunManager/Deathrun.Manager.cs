@@ -28,7 +28,7 @@ public class DeathrunManager : IModSharpModule, IDeathrunManager
     private ModulesManager?                              _modulesManager;
     
     private ISharedSystem                                SharedSystem                        { get; }
-    public static IDeathrunManager?                      Instance                            { get; private set; } = null;
+    public static IDeathrunManager                       Instance                            { get; private set; } = null!;
     public static IServiceProvider?                      ServiceProvider                     { get; private set; }
     
     public static InterfaceBridge                        Bridge                              { get; private set; } = null!;
