@@ -282,6 +282,23 @@ internal class DeathrunModule : IDeathrunModule
         return true;
     }
 
+    /// <summary>
+    /// Logs a formatted message to the console with specified colors, a header, and a message.
+    /// This method adjusts the console's foreground and background colors temporarily
+    /// to highlight the log information and then resets the console colors.
+    /// </summary>
+    /// <param name="textColor">
+    /// The color to be used for the text in the console output.
+    /// </param>
+    /// <param name="backgroundColor">
+    /// The color to be used for the background in the console output.
+    /// </param>
+    /// <param name="header">
+    /// The header text, typically identifying the context or type of the log message (e.g., "Load Deathrun Module").
+    /// </param>
+    /// <param name="message">
+    /// The main message content to be displayed in the log.
+    /// </param>
     private static void Log(ConsoleColor textColor, ConsoleColor backgroundColor, string header, string message)
     {
         Console.ForegroundColor = textColor;
