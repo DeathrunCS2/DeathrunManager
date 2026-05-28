@@ -134,9 +134,6 @@ internal class DeathrunModule : IDeathrunModule
             {
                 throw new ApplicationException($"Class: '{assembly.GetName().Name}' doesn't implement IDeathrunModule interface!");
             }
-
-            _moduleLoader = moduleLoader;
-            _instance = deathrunModule;
             
             foreach (var deathrunModuleInterface in deathrunModuleAssembly.GetInterfaces())
             {
@@ -165,8 +162,8 @@ internal class DeathrunModule : IDeathrunModule
                     .GetProperty("Config", BindingFlags.Public | BindingFlags.Instance)?
                     .SetValue(deathrunModule, configObject);
                 
-                _instance?.GetType().GetMethod("OnConfigParsed")?
-                    .Invoke(_instance, [ configObject ] );
+                deathrunModuleInterface.GetMethod("OnConfigParsed")?
+                    .Invoke(deathrunModule, [ configObject ] );
                 
                 //skip registering the reload command if it's not allowed'
                 if (configOptions?.AllowReloadCommand is not true) continue;
@@ -178,6 +175,9 @@ internal class DeathrunModule : IDeathrunModule
                         $"Reload configuration for {moduleName}", ConVarFlags.Release);
             }
             
+            _moduleLoader = moduleLoader;
+            _instance = deathrunModule;
+
             if (_instance?.Init(hotReload) is not true)
                 throw new ApplicationException($"Failed to initialize deathrun module: {assembly.GetName().Name}");
             
