@@ -9,35 +9,53 @@ using ExampleWithConfig.Config;
 
 namespace ExampleWithConfig;
 
+                                                  //TestConfigStructure is the config structure that will
+                                                  //be used by the DeathrunManager
 public class ExampleWithConfig : IDeathrunModule, IDeathrunModuleConfig<TestConfigStructure>
 {
-    public string                                  Name                          => "Example Module";
+    public string                                  Name                          => "Example Module with Config";
     public string                                  Author                        => "AquaVadis";
 
-    public IDeathrunManager                        DeathrunManager               { get; } //exposed deathrun manager instance
+    //exposed deathrun manager instance
+    public IDeathrunManager                        DeathrunManager               { get; } 
     
-    private readonly ILogger<ExampleWithConfig>            _logger;
-    private readonly ISharedSystem                 _sharedSystem;
-
+    //getter and setter for the config
     public TestConfigStructure?                    Config                        { get; set; }
+    
+    //getter and setter for the config options
     public ConfigOptions                           ConfigOptions                 { get; set; }
+    
+    private readonly ILogger<ExampleWithConfig>    _logger;
+    private readonly ISharedSystem                 _sharedSystem;
     
     //primary ctor is also valid
     public ExampleWithConfig(ISharedSystem sharedSystem, IDeathrunManager deathrunManagerApi)
     {
         _sharedSystem        = sharedSystem;
         _logger              = sharedSystem.GetLoggerFactory().CreateLogger<ExampleWithConfig>();
-        
         DeathrunManager      = deathrunManagerApi;
 
+        //set the config object matching the config structure we've defined in the generic interface
         Config = new TestConfigStructure();
-        ConfigOptions = new ConfigOptions { FileName = "test_suite_config2" };
-
+        
+        //set the config options object that will be used by the deathrun module to load the config
+        ConfigOptions = new ConfigOptions
+        {
+            //override config's filename; default is `config` - no need to include the file extension
+            FileName = "custom_config", 
+            
+            //optional; default is sharp/configs/Deathrun.Manager/modules/{moduleName}
+            //if provided a custom config path, it will always be relative to the deathrun modules' config path
+            CustomPath = "custom_path", 
+            
+            //whether to allow the deathrun module to be reloaded with the `ms_config_{moduleName}_reload` command
+            AllowReloadCommand = true
+        }; 
     }
     
     #region IDeathrunModule
     
-    //This method is called when the deathrun module tries to load and the return value is the result
+    //called when a deathrun module's config is reloaded
     public void OnConfigParsed<TConfig>(TConfig config)
     {
         _logger.LogInformation("[{moduleName}] {colorMessage}",
@@ -45,41 +63,12 @@ public class ExampleWithConfig : IDeathrunModule, IDeathrunModuleConfig<TestConf
             $"Reloaded config! New test string value: {(config as TestConfigStructure)?.TestString}");
     }
 
-    public bool Init(bool hotReload)
-    {
-        //Subscribe to PlayersManager's `Created` event to be notified when a new deathrun player is created
-        DeathrunManager.Managers.PlayersManager.Created += OnDeathrunPlayerCreated;
-        
-        _logger.LogInformation("Init: {colorMessage}", Config?.TestString);
-        
-        return true;
-    }
-
-    //This method is called after the deathrun module has been loaded successfully
-    public void PostInit(bool hotReload) { }
-
-    //This method is called when all the Deathrun modules have been loaded
-    public void OnAllDeathrunModulesLoaded(bool hotReload) { }
-
-    //This method is called when all the ModSharp modules have been loaded
-    public void OnAllModSharpModulesLoaded() { }
-
+    public bool Init(bool hotReload) => true;
+    
     //The method is called when the DeathrunManager is shutting down, but before shutting down the DeathrunManager's managers
-    public void Shutdown(bool hotReload)
-    {
-        //You must unsubscribe from the PlayersManager's `Created` event to avoid issues when reloading modules
-        DeathrunManager.Managers.PlayersManager.Created -= OnDeathrunPlayerCreated;
-    }
+    public void Shutdown(bool hotReload) { }
  
     #endregion
-    
-    //This will be called when a new deathrun player is fully created by the DeathrunManager
-    private void OnDeathrunPlayerCreated(IDeathrunPlayer deathrunPlayer)
-    {
-        _logger.LogInformation("[{moduleName}] {colorMessage}",
-                                                GetType().Name, 
-                                                $"Deathrun player {deathrunPlayer.Client.Name} has been created!");
-    }
     
     #region Log 
     
