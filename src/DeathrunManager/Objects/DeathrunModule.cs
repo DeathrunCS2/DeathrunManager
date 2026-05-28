@@ -1,7 +1,10 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Reflection;
+using System.Text.Json;
 using DeathrunManager.Shared;
+using DeathrunManager.Shared.Config;
 using DeathrunManager.Shared.Objects;
 using McMaster.NETCore.Plugins;
 using Microsoft.Extensions.DependencyInjection;
@@ -29,11 +32,14 @@ internal class DeathrunModule : IDeathrunModule
     private readonly string                         _tempPath;
     private readonly int                            _threadId;
     
-    //module identity
+    #region Identity
+
     public string                                   Name                       => _instance?.Name ?? "Unknown";
     public string                                   Identifier                 { get; private set; }              
     public string                                   Author                     => _instance?.Author ?? "Unknown";
     public Version                                  Version                    => _instance?.GetType().Assembly.GetName().Version ?? new Version(0, 0, 0, 0); 
+    
+    #endregion
     
     //public properties and/or variables
     public IDeathrunManager                         DeathrunManager            => global::DeathrunManager.DeathrunManager.Instance;
@@ -52,6 +58,8 @@ internal class DeathrunModule : IDeathrunModule
         State = ModuleState.Registering;
     }
 
+    #region Methods
+    
     /// <summary>
     /// Initializes the Deathrun module by setting up its state, loading required assemblies,
     /// and preparing the module for runtime. This method handles the core initialization logic
@@ -112,18 +120,44 @@ internal class DeathrunModule : IDeathrunModule
                                                                     });
         
             var assembly = moduleLoader.LoadDefaultAssembly();
-            var deathrunModuleAssembly = assembly
-                                                 .GetTypes()
-                                                 .FirstOrDefault( t => typeof(IDeathrunModule).IsAssignableFrom(t) 
-                                                                            && t.IsAbstract is not true) 
-                                                  ?? throw new BadImageFormatException("Missing IDeathrunModule interface!");      
-    
+            var deathrunModuleAssembly = assembly.GetTypes()
+                                                        .FirstOrDefault( t => typeof(IDeathrunModule).IsAssignableFrom(t) 
+                                                                         && t.IsAbstract is not true) 
+                                                       ?? throw new BadImageFormatException("Missing IDeathrunModule interface!");      
+            
             if (ActivatorUtilities.CreateInstance(_serviceScope.ServiceProvider, deathrunModuleAssembly)
                 is not IDeathrunModule { } deathrunModule)
             {
                 throw new ApplicationException($"Class: '{assembly.GetName().Name}' doesn't implement IDeathrunModule interface!");
             }
 
+            foreach (var deathrunModuleInterface in deathrunModuleAssembly.GetInterfaces())
+            {
+                //look for IDeathrunModuleConfig<> extended classes
+                if (deathrunModuleInterface.IsGenericType is not true || deathrunModuleInterface.GetGenericTypeDefinition() 
+                                                                         != typeof(IDeathrunModuleConfig<>)) 
+                    continue;
+
+                //get the config object type
+                var configObjectType = deathrunModuleInterface.GetGenericArguments().First();
+                    
+                //get the config options object from the module's instance
+                var configOptions = deathrunModuleAssembly
+                    .GetProperty("ConfigOptions", BindingFlags.Public | BindingFlags.Instance)?
+                    .GetValue(deathrunModule) as ConfigOptions;
+                    
+                //call the BuildConfig method with the config object type as a generic argument
+                var configObject = 
+                    typeof(DeathrunModule)
+                    .GetMethod("BuildConfig")?.MakeGenericMethod(configObjectType)
+                    .Invoke(null, [ configOptions ?? new ConfigOptions() ]);
+                    
+                //set the config object on the module instance
+                deathrunModuleAssembly
+                    .GetProperty("Config", BindingFlags.Public | BindingFlags.Instance)?
+                    .SetValue(deathrunModule, configObject);
+            }
+            
             _moduleLoader = moduleLoader;
             _instance = deathrunModule;
             
@@ -282,6 +316,32 @@ internal class DeathrunModule : IDeathrunModule
         return true;
     }
 
+    #endregion
+    
+    public static TConfig? BuildConfig<TConfig>(ConfigOptions? configOptions = null) where TConfig : class, new()
+    {
+        var configOptionsOrDefault = configOptions ?? new ConfigOptions();
+        
+        var moduleConfigPath = Path.GetFullPath(Path.Combine(global::DeathrunManager.DeathrunManager.Instance.CommonVars.ConfigsPath, 
+            "Deathrun.Manager",
+            "modules",
+            typeof(TConfig).Assembly.GetName().Name ?? throw new InvalidOperationException(),
+            configOptionsOrDefault.CustomPath ?? ""));
+        
+        if (Directory.Exists(moduleConfigPath) is not true) 
+            Directory.CreateDirectory(moduleConfigPath);
+        
+        var configFileName = configOptionsOrDefault.FileName;
+        var configPath = Path.Combine(moduleConfigPath, $"{configFileName}.json");
+        if (File.Exists(configPath) is not true)
+        {
+            File.WriteAllText(configPath, 
+                JsonSerializer.Serialize(new TConfig(), new JsonSerializerOptions { WriteIndented = true }));
+        }
+
+        return JsonSerializer.Deserialize<TConfig>(File.ReadAllText(configPath));
+    }
+    
     /// <summary>
     /// Logs a formatted message to the console with specified colors, a header, and a message.
     /// This method adjusts the console's foreground and background colors temporarily
