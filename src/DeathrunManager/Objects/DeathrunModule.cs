@@ -29,6 +29,8 @@ internal class DeathrunModule : IDeathrunModule
     //internal properties and/or variables
     private PluginLoader?                           _moduleLoader;
     private IDeathrunModule?                        _instance;
+    // private static IDeathrunModule?                 _instance;
+
     private IServiceScope?                          _serviceScope;
     private readonly string                         _moduleDllFilePath;
     private readonly string                         _tempPath;
@@ -61,7 +63,7 @@ internal class DeathrunModule : IDeathrunModule
     }
 
     #region Methods
-    
+
     /// <summary>
     /// Initializes the Deathrun module by setting up its state, loading required assemblies,
     /// and preparing the module for runtime. This method handles the core initialization logic
@@ -133,6 +135,9 @@ internal class DeathrunModule : IDeathrunModule
                 throw new ApplicationException($"Class: '{assembly.GetName().Name}' doesn't implement IDeathrunModule interface!");
             }
 
+            _moduleLoader = moduleLoader;
+            _instance = deathrunModule;
+            
             foreach (var deathrunModuleInterface in deathrunModuleAssembly.GetInterfaces())
             {
                 //look for IDeathrunModuleConfig<> extended classes
@@ -160,7 +165,8 @@ internal class DeathrunModule : IDeathrunModule
                     .GetProperty("Config", BindingFlags.Public | BindingFlags.Instance)?
                     .SetValue(deathrunModule, configObject);
                 
-                _instance?.OnConfigParsed(configObject);
+                _instance?.GetType().GetMethod("OnConfigParsed")?
+                    .Invoke(_instance, [ configObject ] );
                 
                 //skip registering the reload command if it's not allowed'
                 if (configOptions?.AllowReloadCommand is not true) continue;
@@ -172,16 +178,13 @@ internal class DeathrunModule : IDeathrunModule
                         $"Reload configuration for {moduleName}", ConVarFlags.Release);
             }
             
-            _moduleLoader = moduleLoader;
-            _instance = deathrunModule;
-            
-            if (_instance.Init(hotReload) is not true)
+            if (_instance?.Init(hotReload) is not true)
                 throw new ApplicationException($"Failed to initialize deathrun module: {assembly.GetName().Name}");
             
             State = ModuleState.Running;
             
             //call post-init
-            _instance?.PostInit(hotReload); 
+            _instance.PostInit(hotReload); 
             
             Log(ConsoleColor.Black, ConsoleColor.Green, "Load Deathrun Module", $"{Identifier}");
             return true;
@@ -352,7 +355,6 @@ internal class DeathrunModule : IDeathrunModule
     }
 
     #endregion
-
     
     #region Config
 
@@ -385,7 +387,10 @@ internal class DeathrunModule : IDeathrunModule
                 .GetProperty("Config", BindingFlags.Public | BindingFlags.Instance)?
                 .SetValue(_instance, configObject);
             
-            _instance?.OnConfigParsed(configObject);
+            if (configObject is null) continue;
+            
+            deathrunModuleInterface.GetMethod("OnConfigParsed")?
+                .Invoke(_instance, [ configObject ] );
             
             if (_instance is null || configObject is null) 
                 throw new ApplicationException($"Failed to build config object for {_instance?.GetType().Assembly.GetName().Name}");    
