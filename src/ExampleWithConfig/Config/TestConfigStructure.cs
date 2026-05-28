@@ -1,4 +1,4 @@
-﻿namespace TestSuite.Config;
+﻿namespace ExampleWithConfig.Config;
 
 public class TestConfigStructure
 {

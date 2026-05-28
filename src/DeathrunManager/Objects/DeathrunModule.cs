@@ -10,7 +10,6 @@ using McMaster.NETCore.Plugins;
 using Microsoft.Extensions.DependencyInjection;
 using Sharp.Shared.Enums;
 using Sharp.Shared.Types;
-using TestSuite.Config;
 
 namespace DeathrunManager.Objects;
 
