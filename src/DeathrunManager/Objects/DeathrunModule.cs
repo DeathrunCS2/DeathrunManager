@@ -168,7 +168,7 @@ internal class DeathrunModule : IDeathrunModule
                 //ms_config_{moduleName}_reload
                 var moduleName = deathrunModuleAssembly.Assembly.GetName().Name ?? throw new InvalidOperationException();
                 global::DeathrunManager.DeathrunManager.Bridge.ConVarManager
-                    .CreateServerCommand($"ms_config_{moduleName}_reload", OnReloadModuleConfigCommand, 
+                    .CreateServerCommand($"ms_config_{moduleName.ToLower()}_reload", OnReloadModuleConfigCommand, 
                         $"Reload configuration for {moduleName}", ConVarFlags.Release);
             }
             
@@ -271,7 +271,7 @@ internal class DeathrunModule : IDeathrunModule
             //remove the reload command
             var moduleName = _instance?.GetType().Assembly.GetName().Name ?? throw new InvalidOperationException();
             global::DeathrunManager.DeathrunManager.Bridge.ConVarManager
-                .ReleaseCommand($"ms_config_{moduleName}_reload");
+                .ReleaseCommand($"ms_config_{moduleName.ToLower()}_reload");
         }
         
         if (hotReload)
