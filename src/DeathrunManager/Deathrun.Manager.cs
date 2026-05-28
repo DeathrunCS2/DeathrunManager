@@ -33,7 +33,7 @@ public class DeathrunManager : IModSharpModule, IDeathrunManager
     
     public static InterfaceBridge                        Bridge                              { get; private set; } = null!;
 
-    public ICommonVars                                  CommonVars                           { get; }
+    public ICommonVars                                   CommonVars                           { get; }
     
     public DeathrunManager(ISharedSystem sharedSystem,
         string                   dllPath,

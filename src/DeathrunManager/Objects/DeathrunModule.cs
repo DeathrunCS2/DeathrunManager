@@ -8,6 +8,9 @@ using DeathrunManager.Shared.Config;
 using DeathrunManager.Shared.Objects;
 using McMaster.NETCore.Plugins;
 using Microsoft.Extensions.DependencyInjection;
+using Sharp.Shared.Enums;
+using Sharp.Shared.Types;
+using TestSuite.Config;
 
 namespace DeathrunManager.Objects;
 
@@ -45,7 +48,7 @@ internal class DeathrunModule : IDeathrunModule
     public IDeathrunManager                         DeathrunManager            => global::DeathrunManager.DeathrunManager.Instance;
     
     public ModuleState                              State                      { get; private set; }
-
+    
     public DeathrunModule(IServiceProvider serviceProvider, string entryDll)
     {
         Identifier = Path.GetFileNameWithoutExtension(entryDll) ?? throw new ArgumentException("Module entry DLL is invalid!"); 
@@ -151,11 +154,20 @@ internal class DeathrunModule : IDeathrunModule
                     typeof(DeathrunModule)
                     .GetMethod("BuildConfig")?.MakeGenericMethod(configObjectType)
                     .Invoke(null, [ configOptions ?? new ConfigOptions() ]);
-                    
+                if (configObject is null) throw new ApplicationException($"Failed to build config object for {deathrunModuleAssembly.Assembly.GetName().Name}");    
+                
                 //set the config object on the module instance
                 deathrunModuleAssembly
                     .GetProperty("Config", BindingFlags.Public | BindingFlags.Instance)?
                     .SetValue(deathrunModule, configObject);
+                
+                _instance?.OnConfigParsed(configObject);
+                
+                //ms_config_{moduleName}_reload
+                var moduleName = deathrunModuleAssembly.Assembly.GetName().Name ?? throw new InvalidOperationException();
+                global::DeathrunManager.DeathrunManager.Bridge.ConVarManager
+                    .CreateServerCommand($"ms_config_{moduleName}_reload", OnReloadModuleConfigCommand, 
+                        $"Reload configuration for {moduleName}", ConVarFlags.Release);
             }
             
             _moduleLoader = moduleLoader;
@@ -239,6 +251,20 @@ internal class DeathrunModule : IDeathrunModule
 
         _instance?.Shutdown(hotReload);
         
+        foreach (var deathrunModuleInterface in _instance?.GetType().GetInterfaces() ?? [])
+        {
+            //look for IDeathrunModuleConfig<> extended classes
+            if (deathrunModuleInterface.IsGenericType is not true || deathrunModuleInterface.GetGenericTypeDefinition() 
+                != typeof(IDeathrunModuleConfig<>)) 
+                continue;
+
+            var moduleName = _instance?.GetType().Assembly.GetName().Name ?? throw new InvalidOperationException();
+            global::DeathrunManager.DeathrunManager.Bridge.ConVarManager
+                .ReleaseCommand($"ms_config_{moduleName}_reload");
+            
+            Log(ConsoleColor.Black, ConsoleColor.Green, "remove reload command for", $"{Identifier}");
+        }
+        
         if (hotReload)
         {
             //reload module context
@@ -317,11 +343,54 @@ internal class DeathrunModule : IDeathrunModule
     }
 
     #endregion
+
     
+    #region Config
+
+    private ECommandAction OnReloadModuleConfigCommand(StringCommand command)
+    {
+        foreach (var deathrunModuleInterface in _instance?.GetType().GetInterfaces() ?? [])
+        {
+            //look for IDeathrunModuleConfig<> extended classes
+            if (deathrunModuleInterface.IsGenericType is not true || deathrunModuleInterface.GetGenericTypeDefinition() 
+                != typeof(IDeathrunModuleConfig<>)) 
+                continue;
+            
+            //get the config object type
+            var configObjectType = deathrunModuleInterface.GetGenericArguments().First();
+
+            //get the config options object from the module's instance
+            var configOptions = _instance?.GetType()
+                .GetProperty("ConfigOptions", BindingFlags.Public | BindingFlags.Instance)?
+                .GetValue(_instance) as ConfigOptions;
+        
+            //call the BuildConfig method with the config object type as a generic argument
+            var configObject =
+                typeof(DeathrunModule)
+                    .GetMethod("BuildConfig")
+                    ?.MakeGenericMethod(configObjectType ?? throw new InvalidOperationException())
+                    .Invoke(null, [configOptions ?? new ConfigOptions()]);
+        
+            //set the config object on the module instance
+            _instance?.GetType()
+                .GetProperty("Config", BindingFlags.Public | BindingFlags.Instance)?
+                .SetValue(_instance, configObject);
+            
+            _instance?.OnConfigParsed(configObject);
+            
+            if (_instance is null || configObject is null) 
+                throw new ApplicationException($"Failed to build config object for {_instance?.GetType().Assembly.GetName().Name}");    
+            
+            Log(ConsoleColor.Black, ConsoleColor.Green, "Reloaded Deathrun Module Config", $"{Identifier}");
+        }
+        
+        return ECommandAction.Skipped;
+    }
+
     public static TConfig? BuildConfig<TConfig>(ConfigOptions? configOptions = null) where TConfig : class, new()
     {
         var configOptionsOrDefault = configOptions ?? new ConfigOptions();
-        
+
         var moduleConfigPath = Path.GetFullPath(Path.Combine(global::DeathrunManager.DeathrunManager.Instance.CommonVars.ConfigsPath, 
             "Deathrun.Manager",
             "modules",
@@ -341,6 +410,8 @@ internal class DeathrunModule : IDeathrunModule
 
         return JsonSerializer.Deserialize<TConfig>(File.ReadAllText(configPath));
     }
+    
+    #endregion
     
     /// <summary>
     /// Logs a formatted message to the console with specified colors, a header, and a message.

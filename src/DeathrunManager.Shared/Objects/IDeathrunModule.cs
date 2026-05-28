@@ -41,7 +41,9 @@ public interface IDeathrunModule
     #endregion
     
     #region Methods
-
+    
+    void OnConfigParsed<TConfig>(TConfig config) { }
+    
     bool Init(bool hotReload);
 
     void PostInit(bool hotReload)
