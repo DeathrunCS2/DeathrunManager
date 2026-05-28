@@ -162,6 +162,9 @@ internal class DeathrunModule : IDeathrunModule
                 
                 _instance?.OnConfigParsed(configObject);
                 
+                //skip registering the reload command if it's not allowed'
+                if (configOptions?.AllowReloadCommand is not true) continue;
+                
                 //ms_config_{moduleName}_reload
                 var moduleName = deathrunModuleAssembly.Assembly.GetName().Name ?? throw new InvalidOperationException();
                 global::DeathrunManager.DeathrunManager.Bridge.ConVarManager
@@ -257,11 +260,18 @@ internal class DeathrunModule : IDeathrunModule
                 != typeof(IDeathrunModuleConfig<>)) 
                 continue;
 
+            //get the config options object from the module's instance
+            var configOptions = _instance?.GetType()
+                .GetProperty("ConfigOptions", BindingFlags.Public | BindingFlags.Instance)?
+                .GetValue(_instance) as ConfigOptions;
+            
+            //skip unregistering the reload command if it's not allowed'
+            if (configOptions?.AllowReloadCommand is not true) continue;
+            
+            //remove the reload command
             var moduleName = _instance?.GetType().Assembly.GetName().Name ?? throw new InvalidOperationException();
             global::DeathrunManager.DeathrunManager.Bridge.ConVarManager
                 .ReleaseCommand($"ms_config_{moduleName}_reload");
-            
-            Log(ConsoleColor.Black, ConsoleColor.Green, "remove reload command for", $"{Identifier}");
         }
         
         if (hotReload)
