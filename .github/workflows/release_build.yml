@@ -2,7 +2,7 @@ name: Release
 
 env:
   APP_NAME: "DeathrunManager"
-  BASE_MODULE_PROJECT_PATH: "./DeathrunManager/DeathrunManager.csproj"
+  BASE_MODULE_PROJECT_PATH: "./DeathrunManager.Main/DeathrunManager.csproj"
   SHARED_PROJECT_PATH: "./DeathrunManager.Shared/DeathrunManager.Shared.csproj"
   
   BASE_MODULE_OUTPUT_PATH: "game/sharp/modules/Deathrun.Manager"
