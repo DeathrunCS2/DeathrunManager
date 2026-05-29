@@ -26,7 +26,7 @@
         <PackageReference Include="MySqlConnector" Version="2.5.0" />
         <PackageReference Include="McMaster.NETCore.Plugins" Version="2.0.0" />
         <ProjectReference Include="..\DeathrunManager.Shared\DeathrunManager.Shared.csproj" PrivateAssets="all" />
-        <ProjectReference Include="..\ExampleWithConfig\ExampleWithConfig.csproj" />
+        <ProjectReference Include="..\DeathrunManager.Examples\ExampleWithConfig\ExampleWithConfig.csproj" />
     </ItemGroup>
     
     <Target Name="CopyCompiledOutputs" AfterTargets="Build">
@@ -38,7 +38,7 @@
 
         <Copy
                 SourceFiles="@(CompiledFiles)"
-                DestinationFolder="..\..\.sharp\modules\Deathrun.Manager" />
+                DestinationFolder="..\.sharp\modules\Deathrun.Manager" />
     </Target>
     
 
