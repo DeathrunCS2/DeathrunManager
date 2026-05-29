@@ -2,8 +2,8 @@ name: Release
 
 env:
   APP_NAME: "DeathrunManager"
-  BASE_MODULE_PROJECT_PATH: "src/DeathrunManager/DeathrunManager.csproj"
-  SHARED_PROJECT_PATH: "src/DeathrunManager.Shared/DeathrunManager.Shared.csproj"
+  BASE_MODULE_PROJECT_PATH: "./DeathrunManager/DeathrunManager.csproj"
+  SHARED_PROJECT_PATH: "./DeathrunManager.Shared/DeathrunManager.Shared.csproj"
   
   BASE_MODULE_OUTPUT_PATH: "game/sharp/modules/Deathrun.Manager"
   SHARED_OUTPUT_PATH: "game/sharp/shared/DeathrunManager.Shared"
@@ -45,7 +45,7 @@ jobs:
       - name: Versioning
         id: build_version
         run: |
-          VERSION=$(grep -oP '<Version>\K[^<]+' ./src/Directory.Build.props)
+          VERSION=$(grep -oP '<Version>\K[^<]+' ./Directory.Build.props)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
           IFS='.' read -r major minor patch <<< "$VERSION"
@@ -147,7 +147,7 @@ jobs:
       # NuGet
       - name: Build and publish Nuget package
         run: |
-          dotnet pack src/DeathrunManager.Shared/DeathrunManager.Shared.csproj --configuration Release --output .build/nuget
+          dotnet pack ./DeathrunManager.Shared/DeathrunManager.Shared.csproj --configuration Release --output .build/nuget
           dotnet nuget push .build/nuget/DeathrunManager.Shared.${{ steps.build_version.outputs.version }}.nupkg --skip-duplicate --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
         
           
