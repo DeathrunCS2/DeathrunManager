@@ -202,7 +202,10 @@ public class DeathrunPlayer : IDeathrunPlayer
     
     public void StopPlayerThink()
     {
-        SetCenterMenuTopRowHtml(null);
+        SetCenterMenuTopRowCellOneHtml(null);
+        SetCenterMenuTopRowCellTwoHtml(null);
+        SetCenterMenuTopRowCellThreeHtml(null);
+        SetCenterMenuTopRowCellFourHtml(null);
         SetCenterMenuMiddleRowHtml(null);
         SetCenterMenuBottomRowHtml(null);
         
@@ -221,8 +224,11 @@ public class DeathrunPlayer : IDeathrunPlayer
             
             PrintToCenterHtml
             (
-                (   _topRowHtml is not null     ? _topRowHtml     + "<br/>" : "") 
-                + (_middleRowHtml       is not null     ? _middleRowHtml  + "<br/>" : "") 
+                (_topRowCellOneHtml ?? "") 
+                + (_topRowCellTwoHtml ?? "") 
+                + (_topRowCellThreeHtml ?? "") 
+                + (_topRowCellFourHtml ?? "")                 
+                + (_middleRowHtml     is not null       ? "<br/>" + _middleRowHtml  + "<br/>" : "") 
                 + _bottomRowHtml        ?? ""
             );
         }
@@ -255,8 +261,11 @@ public class DeathrunPlayer : IDeathrunPlayer
                 $"<font class='fontSize-m stratum-font fontWeight-Bold' color='{(observedDeathrunPlayer?.Class is DPlayerClass.Contestant ? "#ADD8E6" : "#ffb09c")}'>"
                 + $"[{observedDeathrunPlayer?.Client.Name}]"
                 + $"</font>"
-                + ( _topRowHtml       is not null       ? _topRowHtml     + "<br/>" : "") 
-                + (_middleRowHtml     is not null       ? _middleRowHtml  + "<br/>" : "") 
+                + (_topRowCellOneHtml ?? "") 
+                + (_topRowCellTwoHtml ?? "") 
+                + (_topRowCellThreeHtml ?? "") 
+                + (_topRowCellFourHtml ?? "") 
+                + (_middleRowHtml     is not null       ? "<br/>" + _middleRowHtml  + "<br/>" : "") 
                 + _bottomRowHtml      ?? ""
             );
         }
@@ -329,16 +338,24 @@ public class DeathrunPlayer : IDeathrunPlayer
         e.Dispose();
     }
     
-    private string? _topRowHtml;
+    private string? _topRowCellOneHtml;
+    private string? _topRowCellTwoHtml;
+    private string? _topRowCellThreeHtml;
+    private string? _topRowCellFourHtml;
     private string? _middleRowHtml;
     private string? _bottomRowHtml;
     
-    public void SetCenterMenuTopRowHtml(string? htmlString) => _topRowHtml = htmlString;
-
+    public void SetCenterMenuTopRowCellOneHtml(string? htmlString) => _topRowCellOneHtml = htmlString;
+    
+    public void SetCenterMenuTopRowCellTwoHtml(string? htmlString) => _topRowCellTwoHtml = htmlString;
+    
+    public void SetCenterMenuTopRowCellThreeHtml(string? htmlString) => _topRowCellThreeHtml = htmlString;
+    
+    public void SetCenterMenuTopRowCellFourHtml(string? htmlString) => _topRowCellFourHtml = htmlString;
+    
     public void SetCenterMenuMiddleRowHtml(string? htmlString) => _middleRowHtml = htmlString;
     
-    //reserved for lives counter
-    private void SetCenterMenuBottomRowHtml(string? htmlString) => _bottomRowHtml = htmlString;
+    public void SetCenterMenuBottomRowHtml(string? htmlString) => _bottomRowHtml = htmlString;
     
     #endregion
 }

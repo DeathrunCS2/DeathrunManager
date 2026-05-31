@@ -158,18 +158,51 @@ public interface IDeathrunPlayer
     void PrintToCenterHtml(string message);
 
     /// <summary>
-    /// Sets the HTML content for the top row of the center menu.
-    /// This content is displayed to the player as part of the UI.
+    /// Sets the HTML content for the first cell in the top row of the center menu.
+    /// This method is used to customize the display of the center menu by assigning
+    /// specific HTML content to the first cell in its top row.
     /// </summary>
-    /// <param name="htmlString">The HTML string to set for the top row. Can be null to clear the content.</param>
-    void SetCenterMenuTopRowHtml(string? htmlString);
-    
+    /// <param name="htmlString">The HTML string to set for the first cell in the top row.
+    /// It can be null to clear the content of the cell.</param>
+    public void SetCenterMenuTopRowCellOneHtml(string? htmlString);
+
+    /// <summary>
+    /// Sets the HTML content for the second cell in the top row of the center menu.
+    /// This method updates the content of the specified cell to the provided HTML string.
+    /// </summary>
+    /// <param name="htmlString">The HTML string to set as the content of the second cell. Can be null to clear the content.</param>
+    public void SetCenterMenuTopRowCellTwoHtml(string? htmlString);
+
+    /// <summary>
+    /// Sets the HTML content for the third cell in the top row of the center menu.
+    /// This method allows for customization of the center menu's top row appearance by defining the HTML content displayed in the third cell.
+    /// </summary>
+    /// <param name="htmlString">The HTML string to set for the third cell. Can be null to clear the content of the cell.</param>
+    public void SetCenterMenuTopRowCellThreeHtml(string? htmlString);
+
+    /// <summary>
+    /// Updates the HTML content for the fourth cell in the top row of the center menu.
+    /// This method sets the specified HTML string to be displayed in the designated
+    /// cell, allowing dynamic updates of menu content during gameplay.
+    /// </summary>
+    /// <param name="htmlString">The HTML content to set for the fourth cell in the top row of the center menu.
+    /// If null, the cell will be cleared.</param>
+    public void SetCenterMenuTopRowCellFourHtml(string? htmlString);
+
     /// <summary>
     /// Sets the HTML content for the middle row of the center menu.
     /// This content is displayed to the player as part of the UI.
     /// </summary>
     /// <param name="htmlString">The HTML string to set for the middle row. Can be null to clear the content.</param>
     void SetCenterMenuMiddleRowHtml(string? htmlString);
+
+    /// <summary>
+    /// Updates the HTML content of the bottom row in the center menu.
+    /// This method sets the specified HTML string to the bottom row of the center menu,
+    /// allowing dynamic customization or updates to its content.
+    /// </summary>
+    /// <param name="htmlString">The HTML content to set for the bottom row of the center menu. Pass null to clear the content.</param>
+    void SetCenterMenuBottomRowHtml(string? htmlString);
 
     #endregion
 }
