@@ -284,10 +284,7 @@ public class DeathrunPlayer : IDeathrunPlayer
         }
 
         var rawChatMessage = " " + (addPrefix is true ? ManagerConfig.BaseConfig.Prefix : "") + " " + message;
-
-        var args = PlayersManager.Instance.InvokeDeathrunPlayerSendChatMessage(this, rawChatMessage);
-
-        var coloredChatMessage = GameChatExtensions.ProcessColorCodes(args.Message);
+        var coloredChatMessage = GameChatExtensions.ProcessColorCodes(rawChatMessage);
 
         DeathrunManager.Bridge.ModSharp.PrintChannelFilter(HudPrintChannel.Chat, coloredChatMessage, new RecipientFilter(Client.Slot));
     }
