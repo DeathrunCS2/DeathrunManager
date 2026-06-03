@@ -275,7 +275,7 @@ public class DeathrunPlayer : IDeathrunPlayer
     
     #region Chat
     
-    public void SendChatMessage(string message, bool addPrefix = true)
+    public void SendChatMessage(string message)
     {
         if (string.IsNullOrEmpty(message) is true)
         {
@@ -283,13 +283,13 @@ public class DeathrunPlayer : IDeathrunPlayer
             return;
         }
 
-        var rawChatMessage = " " + (addPrefix is true ? ManagerConfig.BaseConfig.Prefix : "") + " " + message;
+        var rawChatMessage = " " + message;
         var coloredChatMessage = GameChatExtensions.ProcessColorCodes(rawChatMessage);
 
         DeathrunManager.Bridge.ModSharp.PrintChannelFilter(HudPrintChannel.Chat, coloredChatMessage, new RecipientFilter(Client.Slot));
     }
 
-    public void SendChatMessage(string message, RecipientFilter recipientFilter, bool addPrefix = true)
+    public void SendChatMessage(string message, RecipientFilter recipientFilter)
     {
         if (string.IsNullOrEmpty(message) is true)
         {
@@ -297,7 +297,7 @@ public class DeathrunPlayer : IDeathrunPlayer
             return;
         }
 
-        var rawChatMessage = " " + (addPrefix is true ? ManagerConfig.BaseConfig.Prefix : "") + " " + message;
+        var rawChatMessage = " " + message;
         
         var args = PlayersManager.Instance.InvokeDeathrunPlayerSendChatMessage(this, rawChatMessage);
 

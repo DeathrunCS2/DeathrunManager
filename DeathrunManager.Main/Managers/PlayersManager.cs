@@ -251,7 +251,7 @@ internal class PlayersManager(
                       + $"{message}";
 
                 var filter = teamOnly ? new RecipientFilter(team) : new RecipientFilter();
-                deathrunPlayer.SendChatMessage(chatMessage, filter, false);
+                deathrunPlayer.SendChatMessage(chatMessage, filter);
             }
             
             return ECommandAction.Stopped;

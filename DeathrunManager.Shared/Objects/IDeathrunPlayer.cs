@@ -133,8 +133,7 @@ public interface IDeathrunPlayer
     /// This method formats the chat message based on configuration settings and sends it to the recipient(s).
     /// </summary>
     /// <param name="message">The content of the chat message to be sent. If null or empty, the message is ignored.</param>
-    /// <param name="addPrefix">Determines whether a predefined prefix is added to the message. Defaults to true.</param>
-    void SendChatMessage(string message, bool addPrefix = true);
+    void SendChatMessage(string message);
 
     /// <summary>
     /// Sends a chat message to players with an optional prefix.
@@ -142,8 +141,7 @@ public interface IDeathrunPlayer
     /// </summary>
     /// <param name="message">The chat message to be sent.</param>
     /// <param name="recipientFilter">Specifies the recipients of the chat message.</param>
-    /// <param name="addPrefix">Determines whether to include the predefined prefix in the message.</param>
-    void SendChatMessage(string message, RecipientFilter recipientFilter, bool addPrefix = true);
+    void SendChatMessage(string message, RecipientFilter recipientFilter);
 
     #endregion
 
