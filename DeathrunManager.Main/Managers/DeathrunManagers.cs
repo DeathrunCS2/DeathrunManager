@@ -8,11 +8,14 @@ namespace DeathrunManager.Managers;
 
 internal class DeathrunManagers(
     IPlayersManager playersManager,
-    IGameplayManager gameplayManager) : IManager, IDeathrunManagers
+    IGameplayManager gameplayManager,
+    ITokensManager tokensManager) : IManager, IDeathrunManagers
 {
     public IPlayersManager PlayersManager => playersManager;
     
     public IGameplayManager GameplayManager => gameplayManager;
+
+    public ITokensManager TokensManager => tokensManager;
     
     public IAdminManager AdminManager 
         => DeathrunManager.Bridge.SharpModuleManager

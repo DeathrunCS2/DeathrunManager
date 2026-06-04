@@ -27,6 +27,7 @@ internal static class ManagersDependencyInjection
         services.AddSingleton<IManager, IDatabaseManager, DatabaseManager>();
         services.AddSingleton<IManager, IPlayersManager, PlayersManager>();
         services.AddSingleton<IManager, IGameplayManager, GameplayManager>();
+        services.AddSingleton<IManager, ITokensManager, TokensManager>();
         //managers repo
         services.AddSingleton<IManager, IDeathrunManagers, DeathrunManagers>();
         

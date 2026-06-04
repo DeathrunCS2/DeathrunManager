@@ -33,6 +33,15 @@ public interface IDeathrunManagers
     IGameplayManager GameplayManager { get; }
 
     /// <summary>
+    /// Provides access to the persistent player tokens management system.
+    /// </summary>
+    /// <remarks>
+    /// The TokensManager property allows Deathrun modules to add, remove, update, and check string tokens
+    /// for a player. Tokens are stored per SteamID64 in MySQL and SteamID64 0 players are ignored.
+    /// </remarks>
+    ITokensManager TokensManager { get; }
+
+    /// <summary>
     /// Provides access to the ModSharp's IAdminManager interface.
     /// </summary>
     /// <remarks>
