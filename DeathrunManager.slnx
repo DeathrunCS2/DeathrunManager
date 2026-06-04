@@ -1,11 +1,19 @@
 <Solution>
-  <Folder Name="/DeathrunManager.Examples/">
-    <Project Path="DeathrunManager.Examples\ExampleWithConfig\ExampleWithConfig.csproj" />
-  </Folder>
-  <Folder Name="/DeathrunManager.Main/">
-    <Project Path="DeathrunManager.Main\DeathrunManager.csproj" />
-  </Folder>
-  <Folder Name="/DeathrunManager.Shared/">
-    <Project Path="DeathrunManager.Shared\DeathrunManager.Shared.csproj" />
-  </Folder>
+    
+    <Folder Name="/DeathrunManager.Main/">
+        <Project Path="DeathrunManager.Main\DeathrunManager.csproj" />
+    </Folder>
+    
+    <Folder Name="/DeathrunManager.Shared/">
+        <Project Path="DeathrunManager.Shared\DeathrunManager.Shared.csproj" />
+    </Folder>
+    
+    <Folder Name="/DeathrunManager.Modules/">
+<!--        <Project Path="DeathrunManager.Modules\SeasonRewards\SeasonRewards.csproj" />-->
+    </Folder>
+
+    <Folder Name="/DeathrunManager.Examples/">
+        <Project Path="DeathrunManager.Examples\ExampleWithConfig\ExampleWithConfig.csproj" />
+    </Folder>
+    
 </Solution>
