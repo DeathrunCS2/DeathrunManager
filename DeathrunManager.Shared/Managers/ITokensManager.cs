@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using DeathrunManager.Shared.Objects;
@@ -5,313 +6,178 @@ using DeathrunManager.Shared.Objects;
 namespace DeathrunManager.Shared.Managers;
 
 /// <summary>
-/// Provides player token management backed by persistent MySQL storage.
-/// Tokens are stored per player's SteamID64 and can be used by Deathrun modules
-/// to gate features, permissions, rewards, cosmetics, missions, and similar logic.
+/// Persistent player token service used by modules to grant, query, consume, revoke, and expire
+/// string-based entitlements/flags such as VIP access, cosmetics, mission unlocks, one-time rewards,
+/// temporary boosts, shop permissions, event passes, and similar in-game state.
 ///
-/// Tokens may be permanent or limited-use.
-/// Permanent tokens have no remaining-use limit.
-/// Limited-use tokens lose uses through TryUseTokenAsync / TryUseTokensAsync and are marked as used when uses reach 0.
+/// Design rules:
+/// - SteamID64 0 is never persisted and always returns safe empty/false results.
+/// - Active tokens are the only tokens that satisfy checks.
+/// - Temporary tokens become inactive after ActiveTillUtc.
+/// - Limited-use tokens become inactive after their remaining uses reach 0.
+/// - Revoked/expired/consumed tokens remain in the database for history unless explicitly deleted.
 /// </summary>
 public interface ITokensManager
 {
-    /// <summary>
-    /// Loads and caches all active token names for the supplied player.
-    /// Players with SteamID64 equal to 0 are ignored and return an empty set.
-    /// </summary>
-    Task<IReadOnlyCollection<string>> GetTokensAsync(IDeathrunPlayer deathrunPlayer);
+    Task<PlayerTokenInfo?> GetTokenAsync(IDeathrunPlayer deathrunPlayer, string token, bool includeInactive = false);
+    Task<PlayerTokenInfo?> GetTokenAsync(ulong steamId64, string token, bool includeInactive = false);
+
+    Task<IReadOnlyCollection<PlayerTokenInfo>> GetTokensAsync(IDeathrunPlayer deathrunPlayer, TokenQuery? query = null);
+    Task<IReadOnlyCollection<PlayerTokenInfo>> GetTokensAsync(ulong steamId64, TokenQuery? query = null);
+
+    Task<TokenGrantResult> GrantTokenAsync(IDeathrunPlayer deathrunPlayer, TokenGrant tokenGrant);
+    Task<TokenGrantResult> GrantTokenAsync(ulong steamId64, TokenGrant tokenGrant);
+
+    Task<int> GrantTokensAsync(IDeathrunPlayer deathrunPlayer, IEnumerable<TokenGrant> tokenGrants);
+    Task<int> GrantTokensAsync(ulong steamId64, IEnumerable<TokenGrant> tokenGrants);
+
+    Task<bool> RenameTokenAsync(IDeathrunPlayer deathrunPlayer, string oldToken, string newToken);
+    Task<bool> RenameTokenAsync(ulong steamId64, string oldToken, string newToken);
 
     /// <summary>
-    /// Loads and caches all active token names for the supplied SteamID64.
-    /// SteamID64 equal to 0 is ignored and returns an empty set.
+    /// Soft-removes a token by marking it inactive. The row remains stored for audit/history.
     /// </summary>
-    Task<IReadOnlyCollection<string>> GetTokensAsync(ulong steamId64);
+    Task<bool> RevokeTokenAsync(IDeathrunPlayer deathrunPlayer, string token, string? reason = null);
+    Task<bool> RevokeTokenAsync(ulong steamId64, string token, string? reason = null);
 
     /// <summary>
-    /// Adds a permanent token to the supplied player if it does not already exist.
-    /// Players with SteamID64 equal to 0 are ignored.
+    /// Hard-deletes a token row. Prefer RevokeTokenAsync for gameplay state unless you intentionally want no history.
     /// </summary>
-    Task<bool> AddTokenAsync(IDeathrunPlayer deathrunPlayer, string token);
+    Task<bool> DeleteTokenAsync(IDeathrunPlayer deathrunPlayer, string token);
+    Task<bool> DeleteTokenAsync(ulong steamId64, string token);
+
+    Task<bool> SetTokenUsesAsync(IDeathrunPlayer deathrunPlayer, string token, int? remainingUses);
+    Task<bool> SetTokenUsesAsync(ulong steamId64, string token, int? remainingUses);
+
+    Task<bool> SetTokenActiveTillAsync(IDeathrunPlayer deathrunPlayer, string token, DateTime? activeTillUtc);
+    Task<bool> SetTokenActiveTillAsync(ulong steamId64, string token, DateTime? activeTillUtc);
+
+    Task<TokenConsumeResult> ConsumeTokenAsync(IDeathrunPlayer deathrunPlayer, string token, int uses = 1);
+    Task<TokenConsumeResult> ConsumeTokenAsync(ulong steamId64, string token, int uses = 1);
 
     /// <summary>
-    /// Adds a permanent token to the supplied SteamID64 if it does not already exist.
-    /// SteamID64 equal to 0 is ignored.
+    /// Consumes multiple tokens in one operation. When requireAll is true, no token is consumed unless every requested token can be consumed.
     /// </summary>
-    Task<bool> AddTokenAsync(ulong steamId64, string token);
+    Task<TokenConsumeBatchResult> ConsumeTokensAsync(IDeathrunPlayer deathrunPlayer, IEnumerable<TokenSpend> tokens, bool requireAll = true);
+    Task<TokenConsumeBatchResult> ConsumeTokensAsync(ulong steamId64, IEnumerable<TokenSpend> tokens, bool requireAll = true);
 
-    /// <summary>
-    /// Adds a limited-use token to the supplied player if it does not already exist.
-    /// usesLeft must be greater than 0. Players with SteamID64 equal to 0 are ignored.
-    /// </summary>
-    Task<bool> AddTokenAsync(IDeathrunPlayer deathrunPlayer, string token, int usesLeft);
+    Task<bool> HasTokenAsync(IDeathrunPlayer deathrunPlayer, string token, int requiredUses = 1);
+    Task<bool> HasTokenAsync(ulong steamId64, string token, int requiredUses = 1);
 
-    /// <summary>
-    /// Adds a limited-use token to the supplied SteamID64 if it does not already exist.
-    /// usesLeft must be greater than 0. SteamID64 equal to 0 is ignored.
-    /// </summary>
-    Task<bool> AddTokenAsync(ulong steamId64, string token, int usesLeft);
+    Task<bool> MatchesAsync(IDeathrunPlayer deathrunPlayer, TokenRequirement requirement);
+    Task<bool> MatchesAsync(ulong steamId64, TokenRequirement requirement);
 
-    /// <summary>
-    /// Adds a range of permanent tokens to the supplied player.
-    /// Players with SteamID64 equal to 0 are ignored.
-    /// </summary>
-    Task<int> AddTokensAsync(IDeathrunPlayer deathrunPlayer, IEnumerable<string> tokens);
+    Task<int> RefreshTokenStatesAsync(IDeathrunPlayer deathrunPlayer);
+    Task<int> RefreshTokenStatesAsync(ulong steamId64);
+    Task<int> RefreshExpiredTokensAsync();
 
-    /// <summary>
-    /// Adds a range of permanent tokens to the supplied SteamID64.
-    /// SteamID64 equal to 0 is ignored.
-    /// </summary>
-    Task<int> AddTokensAsync(ulong steamId64, IEnumerable<string> tokens);
-
-    /// <summary>
-    /// Adds a range of limited-use tokens to the supplied player.
-    /// usesLeftPerToken must be greater than 0. Players with SteamID64 equal to 0 are ignored.
-    /// </summary>
-    Task<int> AddTokensAsync(IDeathrunPlayer deathrunPlayer, IEnumerable<string> tokens, int usesLeftPerToken);
-
-    /// <summary>
-    /// Adds a range of limited-use tokens to the supplied SteamID64.
-    /// usesLeftPerToken must be greater than 0. SteamID64 equal to 0 is ignored.
-    /// </summary>
-    Task<int> AddTokensAsync(ulong steamId64, IEnumerable<string> tokens, int usesLeftPerToken);
-
-    /// <summary>
-    /// Removes a token from the supplied player if it exists.
-    /// Players with SteamID64 equal to 0 are ignored.
-    /// </summary>
-    Task<bool> RemoveTokenAsync(IDeathrunPlayer deathrunPlayer, string token);
-
-    /// <summary>
-    /// Removes a token from the supplied SteamID64 if it exists.
-    /// SteamID64 equal to 0 is ignored.
-    /// </summary>
-    Task<bool> RemoveTokenAsync(ulong steamId64, string token);
-
-    /// <summary>
-    /// Removes a range of tokens from the supplied player.
-    /// Players with SteamID64 equal to 0 are ignored.
-    /// </summary>
-    Task<int> RemoveTokensAsync(IDeathrunPlayer deathrunPlayer, IEnumerable<string> tokens);
-
-    /// <summary>
-    /// Removes a range of tokens from the supplied SteamID64.
-    /// SteamID64 equal to 0 is ignored.
-    /// </summary>
-    Task<int> RemoveTokensAsync(ulong steamId64, IEnumerable<string> tokens);
-
-    /// <summary>
-    /// Replaces an old token with a new token for the supplied player.
-    /// The old token's remaining uses are preserved on the new token.
-    /// Players with SteamID64 equal to 0 are ignored.
-    /// </summary>
-    Task<bool> UpdateTokenAsync(IDeathrunPlayer deathrunPlayer, string oldToken, string newToken);
-
-    /// <summary>
-    /// Replaces an old token with a new token for the supplied SteamID64.
-    /// The old token's remaining uses are preserved on the new token.
-    /// SteamID64 equal to 0 is ignored.
-    /// </summary>
-    Task<bool> UpdateTokenAsync(ulong steamId64, string oldToken, string newToken);
-
-    /// <summary>
-    /// Replaces all existing tokens for the supplied player with the provided permanent token set.
-    /// Players with SteamID64 equal to 0 are ignored.
-    /// </summary>
-    Task<bool> SetTokensAsync(IDeathrunPlayer deathrunPlayer, IEnumerable<string> tokens);
-
-    /// <summary>
-    /// Replaces all existing tokens for the supplied SteamID64 with the provided permanent token set.
-    /// SteamID64 equal to 0 is ignored.
-    /// </summary>
-    Task<bool> SetTokensAsync(ulong steamId64, IEnumerable<string> tokens);
-
-    /// <summary>
-    /// Sets a token to permanent uses. The token must already exist.
-    /// Players with SteamID64 equal to 0 are ignored.
-    /// </summary>
-    Task<bool> SetTokenUnlimitedUsesAsync(IDeathrunPlayer deathrunPlayer, string token);
-
-    /// <summary>
-    /// Sets a token to permanent uses. The token must already exist.
-    /// SteamID64 equal to 0 is ignored.
-    /// </summary>
-    Task<bool> SetTokenUnlimitedUsesAsync(ulong steamId64, string token);
-
-    /// <summary>
-    /// Sets remaining uses for an existing token.
-    /// usesLeft must be greater than 0. Players with SteamID64 equal to 0 are ignored.
-    /// </summary>
-    Task<bool> SetTokenUsesAsync(IDeathrunPlayer deathrunPlayer, string token, int usesLeft);
-
-    /// <summary>
-    /// Sets remaining uses for an existing token.
-    /// usesLeft must be greater than 0. SteamID64 equal to 0 is ignored.
-    /// </summary>
-    Task<bool> SetTokenUsesAsync(ulong steamId64, string token, int usesLeft);
-
-    /// <summary>
-    /// Gets remaining uses for a token.
-    /// Returns -1 for active permanent tokens and 0 when the player does not have the token or the token is already used.
-    /// Players with SteamID64 equal to 0 return 0.
-    /// </summary>
-    Task<int> GetTokenUsesLeftAsync(IDeathrunPlayer deathrunPlayer, string token);
-
-    /// <summary>
-    /// Gets remaining uses for a token.
-    /// Returns -1 for active permanent tokens and 0 when the SteamID64 does not have the token or the token is already used.
-    /// SteamID64 equal to 0 returns 0.
-    /// </summary>
-    Task<int> GetTokenUsesLeftAsync(ulong steamId64, string token);
-
-    /// <summary>
-    /// Loads and caches all used token names for the supplied player.
-    /// Used tokens are limited-use tokens that reached 0 uses and are kept in MySQL instead of deleted.
-    /// Players with SteamID64 equal to 0 are ignored and return an empty set.
-    /// </summary>
-    Task<IReadOnlyCollection<string>> GetUsedTokensAsync(IDeathrunPlayer deathrunPlayer);
-
-    /// <summary>
-    /// Loads and caches all used token names for the supplied SteamID64.
-    /// Used tokens are limited-use tokens that reached 0 uses and are kept in MySQL instead of deleted.
-    /// SteamID64 equal to 0 is ignored and returns an empty set.
-    /// </summary>
-    Task<IReadOnlyCollection<string>> GetUsedTokensAsync(ulong steamId64);
-
-    /// <summary>
-    /// Checks whether a token exists but is already marked as used for the supplied player.
-    /// Players with SteamID64 equal to 0 return false.
-    /// </summary>
-    Task<bool> IsTokenUsedAsync(IDeathrunPlayer deathrunPlayer, string token);
-
-    /// <summary>
-    /// Checks whether a token exists but is already marked as used for the supplied SteamID64.
-    /// SteamID64 equal to 0 returns false.
-    /// </summary>
-    Task<bool> IsTokenUsedAsync(ulong steamId64, string token);
-
-    /// <summary>
-    /// Uses a token once.
-    /// Permanent tokens remain unchanged. Limited-use tokens are decremented and marked as used at 0.
-    /// Returns false if the player does not have the token or the player SteamID64 is 0.
-    /// </summary>
-    Task<bool> TryUseTokenAsync(IDeathrunPlayer deathrunPlayer, string token);
-
-    /// <summary>
-    /// Uses a token once.
-    /// Permanent tokens remain unchanged. Limited-use tokens are decremented and marked as used at 0.
-    /// Returns false if the SteamID64 does not have the token or is 0.
-    /// </summary>
-    Task<bool> TryUseTokenAsync(ulong steamId64, string token);
-
-    /// <summary>
-    /// Uses a token a specified amount of times.
-    /// Permanent tokens remain unchanged. Limited-use tokens must have at least usesToSpend uses left.
-    /// Returns false if the player does not have the token, usesToSpend is invalid, or the player SteamID64 is 0.
-    /// </summary>
-    Task<bool> TryUseTokenAsync(IDeathrunPlayer deathrunPlayer, string token, int usesToSpend);
-
-    /// <summary>
-    /// Uses a token a specified amount of times.
-    /// Permanent tokens remain unchanged. Limited-use tokens must have at least usesToSpend uses left.
-    /// Returns false if the SteamID64 does not have the token, usesToSpend is invalid, or the SteamID64 is 0.
-    /// </summary>
-    Task<bool> TryUseTokenAsync(ulong steamId64, string token, int usesToSpend);
-
-    /// <summary>
-    /// Uses a range of tokens once each.
-    /// If requireAllTokens is true, all tokens must be usable before any token is consumed.
-    /// If requireAllTokens is false, every currently usable token from the range is consumed once and the method returns true when at least one token was consumed.
-    /// </summary>
-    Task<bool> TryUseTokensAsync(IDeathrunPlayer deathrunPlayer, IEnumerable<string> tokens, bool requireAllTokens = true);
-
-    /// <summary>
-    /// Uses a range of tokens once each.
-    /// If requireAllTokens is true, all tokens must be usable before any token is consumed.
-    /// If requireAllTokens is false, every currently usable token from the range is consumed once and the method returns true when at least one token was consumed.
-    /// </summary>
-    Task<bool> TryUseTokensAsync(ulong steamId64, IEnumerable<string> tokens, bool requireAllTokens = true);
-
-    /// <summary>
-    /// Checks whether the supplied player has a specific active token. Used tokens do not pass this check.
-    /// Players with SteamID64 equal to 0 return false.
-    /// </summary>
-    Task<bool> HasTokenAsync(IDeathrunPlayer deathrunPlayer, string token);
-
-    /// <summary>
-    /// Checks whether the supplied SteamID64 has a specific active token. Used tokens do not pass this check.
-    /// SteamID64 equal to 0 returns false.
-    /// </summary>
-    Task<bool> HasTokenAsync(ulong steamId64, string token);
-
-    /// <summary>
-    /// Checks whether the supplied player has an active token and enough remaining uses.
-    /// Permanent tokens always pass when the token exists.
-    /// Players with SteamID64 equal to 0 return false.
-    /// </summary>
-    Task<bool> HasTokenUsesAsync(IDeathrunPlayer deathrunPlayer, string token, int requiredUses);
-
-    /// <summary>
-    /// Checks whether the supplied SteamID64 has an active token and enough remaining uses.
-    /// Permanent tokens always pass when the token exists.
-    /// SteamID64 equal to 0 returns false.
-    /// </summary>
-    Task<bool> HasTokenUsesAsync(ulong steamId64, string token, int requiredUses);
-
-    /// <summary>
-    /// Checks whether the supplied player has every token in the provided range.
-    /// Players with SteamID64 equal to 0 return false.
-    /// </summary>
-    Task<bool> HasAllTokensAsync(IDeathrunPlayer deathrunPlayer, IEnumerable<string> tokens);
-
-    /// <summary>
-    /// Checks whether the supplied SteamID64 has every token in the provided range.
-    /// SteamID64 equal to 0 return false.
-    /// </summary>
-    Task<bool> HasAllTokensAsync(ulong steamId64, IEnumerable<string> tokens);
-
-    /// <summary>
-    /// Checks whether the supplied player has any token from the provided range.
-    /// Players with SteamID64 equal to 0 return false.
-    /// </summary>
-    Task<bool> HasAnyTokenAsync(IDeathrunPlayer deathrunPlayer, IEnumerable<string> tokens);
-
-    /// <summary>
-    /// Checks whether the supplied SteamID64 has any token from the provided range.
-    /// SteamID64 equal to 0 returns false.
-    /// </summary>
-    Task<bool> HasAnyTokenAsync(ulong steamId64, IEnumerable<string> tokens);
-
-    /// <summary>
-    /// Checks token requirements in one call.
-    /// Required tokens may be matched as all-required or any-required.
-    /// Excluded tokens fail the check if the player has any of them.
-    /// Players with SteamID64 equal to 0 return false.
-    /// </summary>
-    Task<bool> MatchesTokensAsync(
-        IDeathrunPlayer deathrunPlayer,
-        IEnumerable<string>? requiredTokens = null,
-        IEnumerable<string>? excludedTokens = null,
-        bool requireAllRequiredTokens = true);
-
-    /// <summary>
-    /// Checks token requirements in one call.
-    /// Required tokens may be matched as all-required or any-required.
-    /// Excluded tokens fail the check if the SteamID64 has any of them.
-    /// SteamID64 equal to 0 returns false.
-    /// </summary>
-    Task<bool> MatchesTokensAsync(
-        ulong steamId64,
-        IEnumerable<string>? requiredTokens = null,
-        IEnumerable<string>? excludedTokens = null,
-        bool requireAllRequiredTokens = true);
-
-    /// <summary>
-    /// Removes cached tokens for the supplied SteamID64. The database is not modified.
-    /// </summary>
     void ClearCachedTokens(ulong steamId64);
-
-    /// <summary>
-    /// Removes all cached tokens. The database is not modified.
-    /// </summary>
     void ClearCache();
+}
+
+public enum TokenGrantResult
+{
+    InvalidRequest,
+    SkippedInvalidSteamId,
+    Created,
+    Replaced,
+    Refreshed,
+    Failed
+}
+
+public enum TokenConsumeResult
+{
+    InvalidRequest,
+    SkippedInvalidSteamId,
+    Missing,
+    Inactive,
+    Expired,
+    InsufficientUses,
+    Consumed,
+    Unlimited
+}
+
+public enum TokenInactiveReason
+{
+    None,
+    Consumed,
+    Expired,
+    Revoked,
+    Replaced
+}
+
+public enum TokenMatchMode
+{
+    All,
+    Any
+}
+
+public sealed record TokenGrant(
+    string Token,
+    int? RemainingUses = null,
+    DateTime? ActiveTillUtc = null,
+    bool ReplaceExisting = true,
+    string? MetadataJson = null)
+{
+    public static TokenGrant Permanent(string token, string? metadataJson = null)
+        => new(token, null, null, true, metadataJson);
+
+    public static TokenGrant Limited(string token, int remainingUses, string? metadataJson = null)
+        => new(token, remainingUses, null, true, metadataJson);
+
+    public static TokenGrant Temporary(string token, DateTime activeTillUtc, string? metadataJson = null)
+        => new(token, null, activeTillUtc, true, metadataJson);
+
+    public static TokenGrant LimitedTemporary(string token, int remainingUses, DateTime activeTillUtc, string? metadataJson = null)
+        => new(token, remainingUses, activeTillUtc, true, metadataJson);
+}
+
+public sealed record TokenSpend(string Token, int Uses = 1);
+
+public sealed record TokenRequirement(
+    IEnumerable<string>? RequiredTokens = null,
+    IEnumerable<string>? ExcludedTokens = null,
+    TokenMatchMode RequiredMatchMode = TokenMatchMode.All,
+    int RequiredUses = 1)
+{
+    public static TokenRequirement RequireAll(params string[] tokens)
+        => new(tokens, null, TokenMatchMode.All);
+
+    public static TokenRequirement RequireAny(params string[] tokens)
+        => new(tokens, null, TokenMatchMode.Any);
+}
+
+public sealed record TokenQuery(
+    bool IncludeInactive = false,
+    bool OnlyActive = true,
+    bool IncludeExpired = false,
+    IEnumerable<string>? Tokens = null)
+{
+    public static TokenQuery ActiveOnly { get; } = new();
+    public static TokenQuery All { get; } = new(IncludeInactive: true, OnlyActive: false, IncludeExpired: true);
+}
+
+public sealed record PlayerTokenInfo(
+    ulong SteamId64,
+    string Token,
+    bool Active,
+    int? RemainingUses,
+    DateTime? ActiveTillUtc,
+    TokenInactiveReason InactiveReason,
+    string? MetadataJson,
+    DateTime CreatedAtUtc,
+    DateTime UpdatedAtUtc)
+{
+    public bool IsUnlimited => RemainingUses is null;
+    public bool IsLimitedUse => RemainingUses is not null;
+    public bool IsTemporary => ActiveTillUtc is not null;
+    public bool IsExpired => ActiveTillUtc is not null && ActiveTillUtc.Value <= DateTime.UtcNow;
+    public bool CanBeUsed => Active && !IsExpired && (RemainingUses is null or > 0);
+}
+
+public sealed record TokenConsumeBatchResult(
+    bool Success,
+    IReadOnlyDictionary<string, TokenConsumeResult> Results)
+{
+    public static TokenConsumeBatchResult Empty { get; } = new(false, new Dictionary<string, TokenConsumeResult>());
 }

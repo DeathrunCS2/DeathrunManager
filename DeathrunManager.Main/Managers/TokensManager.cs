@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Data;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -21,7 +22,7 @@ internal sealed class TokensManager(
 {
     private static readonly StringComparer TokenComparer = StringComparer.OrdinalIgnoreCase;
 
-    private readonly ConcurrentDictionary<ulong, Dictionary<string, PlayerToken>> _tokensCache = new();
+    private readonly ConcurrentDictionary<ulong, Dictionary<string, PlayerTokenInfo>> _tokensCache = new();
     private readonly ConcurrentDictionary<ulong, SemaphoreSlim> _playerLocks = new();
 
     public static TokensManagerConfig TokensManagerConfig { get; private set; } = null!;
@@ -38,9 +39,17 @@ internal sealed class TokensManager(
             return true;
         }
 
-        SetupDatabaseTables();
-
-        return true;
+        try
+        {
+            SetupDatabaseTablesAsync().GetAwaiter().GetResult();
+            RefreshExpiredTokensAsync().GetAwaiter().GetResult();
+            return true;
+        }
+        catch (Exception e)
+        {
+            logger.LogError(e, "Failed to initialize Tokens Manager.");
+            return false;
+        }
     }
 
     public void Shutdown()
@@ -57,59 +66,101 @@ internal sealed class TokensManager(
 
     #endregion
 
-    #region Tokens API
+    #region Query API
 
-    public Task<IReadOnlyCollection<string>> GetTokensAsync(IDeathrunPlayer deathrunPlayer)
-        => GetTokensAsync(GetSteamId64(deathrunPlayer));
+    public Task<PlayerTokenInfo?> GetTokenAsync(IDeathrunPlayer deathrunPlayer, string token, bool includeInactive = false)
+        => GetTokenAsync(GetSteamId64(deathrunPlayer), token, includeInactive);
 
-    public async Task<IReadOnlyCollection<string>> GetTokensAsync(ulong steamId64)
+    public async Task<PlayerTokenInfo?> GetTokenAsync(ulong steamId64, string token, bool includeInactive = false)
     {
-        if (CanUseSteamId64(steamId64) is not true) return Array.Empty<string>();
+        if (CanUseSteamId64(steamId64) is not true || TryNormalizeToken(token, out var normalizedToken) is not true)
+        {
+            return null;
+        }
 
+        await RefreshTokenStatesAsync(steamId64);
+        var tokens = await GetOrLoadTokensAsync(steamId64);
+
+        lock (tokens)
+        {
+            if (tokens.TryGetValue(normalizedToken, out var playerToken) is not true) return null;
+            if (includeInactive is not true && playerToken.CanBeUsed is not true) return null;
+
+            return playerToken;
+        }
+    }
+
+    public Task<IReadOnlyCollection<PlayerTokenInfo>> GetTokensAsync(IDeathrunPlayer deathrunPlayer, TokenQuery? query = null)
+        => GetTokensAsync(GetSteamId64(deathrunPlayer), query);
+
+    public async Task<IReadOnlyCollection<PlayerTokenInfo>> GetTokensAsync(ulong steamId64, TokenQuery? query = null)
+    {
+        if (CanUseSteamId64(steamId64) is not true) return Array.Empty<PlayerTokenInfo>();
+
+        await RefreshTokenStatesAsync(steamId64);
+        var normalizedQuery = query ?? TokenQuery.ActiveOnly;
+        var requestedTokens = NormalizeTokens(normalizedQuery.Tokens ?? Array.Empty<string>());
         var tokens = await GetOrLoadTokensAsync(steamId64);
 
         lock (tokens)
         {
             return tokens.Values
-                .Where(playerToken => playerToken.IsUsed is not true)
-                .Select(playerToken => playerToken.Token)
+                .Where(playerToken => MatchesQuery(playerToken, normalizedQuery, requestedTokens))
+                .OrderBy(playerToken => playerToken.Token, TokenComparer)
                 .ToArray();
         }
     }
 
-    public Task<bool> AddTokenAsync(IDeathrunPlayer deathrunPlayer, string token)
-        => AddTokenAsync(GetSteamId64(deathrunPlayer), token);
+    public Task<bool> HasTokenAsync(IDeathrunPlayer deathrunPlayer, string token, int requiredUses = 1)
+        => HasTokenAsync(GetSteamId64(deathrunPlayer), token, requiredUses);
 
-    public Task<bool> AddTokenAsync(ulong steamId64, string token)
-        => AddTokenInternalAsync(steamId64, token, null);
-
-    public Task<bool> AddTokenAsync(IDeathrunPlayer deathrunPlayer, string token, int usesLeft)
-        => AddTokenAsync(GetSteamId64(deathrunPlayer), token, usesLeft);
-
-    public Task<bool> AddTokenAsync(ulong steamId64, string token, int usesLeft)
-        => AddTokenInternalAsync(steamId64, token, usesLeft);
-
-    public Task<int> AddTokensAsync(IDeathrunPlayer deathrunPlayer, IEnumerable<string> tokens)
-        => AddTokensAsync(GetSteamId64(deathrunPlayer), tokens);
-
-    public Task<int> AddTokensAsync(ulong steamId64, IEnumerable<string> tokens)
-        => AddTokensInternalAsync(steamId64, tokens, null);
-
-    public Task<int> AddTokensAsync(IDeathrunPlayer deathrunPlayer, IEnumerable<string> tokens, int usesLeftPerToken)
-        => AddTokensAsync(GetSteamId64(deathrunPlayer), tokens, usesLeftPerToken);
-
-    public Task<int> AddTokensAsync(ulong steamId64, IEnumerable<string> tokens, int usesLeftPerToken)
-        => AddTokensInternalAsync(steamId64, tokens, usesLeftPerToken);
-
-    public Task<bool> RemoveTokenAsync(IDeathrunPlayer deathrunPlayer, string token)
-        => RemoveTokenAsync(GetSteamId64(deathrunPlayer), token);
-
-    public async Task<bool> RemoveTokenAsync(ulong steamId64, string token)
+    public async Task<bool> HasTokenAsync(ulong steamId64, string token, int requiredUses = 1)
     {
-        if (CanUseSteamId64(steamId64) is not true || TryNormalizeToken(token, out var normalizedToken) is not true)
+        if (requiredUses <= 0) return false;
+
+        var playerToken = await GetTokenAsync(steamId64, token);
+        return playerToken is not null && HasEnoughUses(playerToken, requiredUses);
+    }
+
+    public Task<bool> MatchesAsync(IDeathrunPlayer deathrunPlayer, TokenRequirement requirement)
+        => MatchesAsync(GetSteamId64(deathrunPlayer), requirement);
+
+    public async Task<bool> MatchesAsync(ulong steamId64, TokenRequirement requirement)
+    {
+        if (CanUseSteamId64(steamId64) is not true || requirement.RequiredUses <= 0) return false;
+
+        var requiredTokens = NormalizeTokens(requirement.RequiredTokens ?? Array.Empty<string>());
+        var excludedTokens = NormalizeTokens(requirement.ExcludedTokens ?? Array.Empty<string>());
+
+        await RefreshTokenStatesAsync(steamId64);
+        var tokens = await GetOrLoadTokensAsync(steamId64);
+
+        lock (tokens)
         {
-            return false;
+            if (excludedTokens.Any(token => tokens.TryGetValue(token, out var playerToken) && playerToken.CanBeUsed))
+            {
+                return false;
+            }
+
+            if (requiredTokens.Count is 0) return true;
+
+            return requirement.RequiredMatchMode is TokenMatchMode.All
+                ? requiredTokens.All(token => tokens.TryGetValue(token, out var playerToken) && playerToken.CanBeUsed && HasEnoughUses(playerToken, requirement.RequiredUses))
+                : requiredTokens.Any(token => tokens.TryGetValue(token, out var playerToken) && playerToken.CanBeUsed && HasEnoughUses(playerToken, requirement.RequiredUses));
         }
+    }
+
+    #endregion
+
+    #region Mutation API
+
+    public Task<TokenGrantResult> GrantTokenAsync(IDeathrunPlayer deathrunPlayer, TokenGrant tokenGrant)
+        => GrantTokenAsync(GetSteamId64(deathrunPlayer), tokenGrant);
+
+    public async Task<TokenGrantResult> GrantTokenAsync(ulong steamId64, TokenGrant tokenGrant)
+    {
+        if (CanUseSteamId64(steamId64) is not true) return TokenGrantResult.SkippedInvalidSteamId;
+        if (TryCreateGrant(steamId64, tokenGrant, out var playerToken) is not true) return TokenGrantResult.InvalidRequest;
 
         var playerLock = GetPlayerLock(steamId64);
         await playerLock.WaitAsync();
@@ -117,32 +168,48 @@ internal sealed class TokensManager(
         try
         {
             var tokens = await GetOrLoadTokensAsync(steamId64, true);
+            var exists = false;
+            var existingWasInactive = false;
 
             lock (tokens)
             {
-                if (tokens.ContainsKey(normalizedToken) is not true) return false;
+                if (tokens.TryGetValue(playerToken.Token, out var existingToken))
+                {
+                    exists = true;
+                    existingWasInactive = existingToken.Active is not true;
+                }
+            }
+
+            if (exists && tokenGrant.ReplaceExisting is not true)
+            {
+                return TokenGrantResult.InvalidRequest;
             }
 
             await using var dbConnection = CreateDbConnection();
             await dbConnection.OpenAsync();
 
-            var affectedRows = await dbConnection.ExecuteAsync($@"
-                DELETE FROM `{TokensManagerConfig.TableName}`
-                WHERE `steamid64` = @SteamId64 AND `token` = @Token;", new { SteamId64 = steamId64, Token = normalizedToken });
+            await dbConnection.ExecuteAsync($@"
+                INSERT INTO `{TokensManagerConfig.TableName}`
+                    (`steamid64`, `token`, `active`, `remaining_uses`, `active_till`, `inactive_reason`, `metadata_json`)
+                VALUES
+                    (@SteamId64, @Token, @Active, @RemainingUses, @ActiveTillUtc, @InactiveReason, @MetadataJson)
+                ON DUPLICATE KEY UPDATE
+                    `active` = VALUES(`active`),
+                    `remaining_uses` = VALUES(`remaining_uses`),
+                    `active_till` = VALUES(`active_till`),
+                    `inactive_reason` = VALUES(`inactive_reason`),
+                    `metadata_json` = VALUES(`metadata_json`);", ToDbParams(playerToken));
 
-            if (affectedRows <= 0) return false;
+            ClearCachedTokens(steamId64);
 
-            lock (tokens)
-            {
-                tokens.Remove(normalizedToken);
-            }
-
-            return true;
+            if (exists is not true) return TokenGrantResult.Created;
+            return existingWasInactive ? TokenGrantResult.Refreshed : TokenGrantResult.Replaced;
         }
         catch (Exception e)
         {
-            logger.LogError(e, "Failed to remove token {token} from {steamId64}.", normalizedToken, steamId64);
-            return false;
+            logger.LogError(e, "Failed to grant token {token} to {steamId64}.", playerToken.Token, steamId64);
+            ClearCachedTokens(steamId64);
+            return TokenGrantResult.Failed;
         }
         finally
         {
@@ -150,29 +217,35 @@ internal sealed class TokensManager(
         }
     }
 
-    public Task<int> RemoveTokensAsync(IDeathrunPlayer deathrunPlayer, IEnumerable<string> tokens)
-        => RemoveTokensAsync(GetSteamId64(deathrunPlayer), tokens);
+    public Task<int> GrantTokensAsync(IDeathrunPlayer deathrunPlayer, IEnumerable<TokenGrant> tokenGrants)
+        => GrantTokensAsync(GetSteamId64(deathrunPlayer), tokenGrants);
 
-    public async Task<int> RemoveTokensAsync(ulong steamId64, IEnumerable<string> tokens)
+    public async Task<int> GrantTokensAsync(ulong steamId64, IEnumerable<TokenGrant> tokenGrants)
     {
         if (CanUseSteamId64(steamId64) is not true) return 0;
 
-        var normalizedTokens = NormalizeTokens(tokens);
-        if (normalizedTokens.Count is 0) return 0;
+        var grants = tokenGrants
+            .Where(grant => TryCreateGrant(steamId64, grant, out _))
+            .GroupBy(grant => NormalizeToken(grant.Token), TokenComparer)
+            .Select(group => group.Last())
+            .ToArray();
 
-        var removed = 0;
-        foreach (var token in normalizedTokens)
+        if (grants.Length is 0) return 0;
+
+        var granted = 0;
+        foreach (var grant in grants)
         {
-            if (await RemoveTokenAsync(steamId64, token) is true) removed++;
+            var result = await GrantTokenAsync(steamId64, grant);
+            if (result is TokenGrantResult.Created or TokenGrantResult.Replaced or TokenGrantResult.Refreshed) granted++;
         }
 
-        return removed;
+        return granted;
     }
 
-    public Task<bool> UpdateTokenAsync(IDeathrunPlayer deathrunPlayer, string oldToken, string newToken)
-        => UpdateTokenAsync(GetSteamId64(deathrunPlayer), oldToken, newToken);
+    public Task<bool> RenameTokenAsync(IDeathrunPlayer deathrunPlayer, string oldToken, string newToken)
+        => RenameTokenAsync(GetSteamId64(deathrunPlayer), oldToken, newToken);
 
-    public async Task<bool> UpdateTokenAsync(ulong steamId64, string oldToken, string newToken)
+    public async Task<bool> RenameTokenAsync(ulong steamId64, string oldToken, string newToken)
     {
         if (CanUseSteamId64(steamId64) is not true
             || TryNormalizeToken(oldToken, out var normalizedOldToken) is not true
@@ -189,91 +262,49 @@ internal sealed class TokensManager(
         try
         {
             var tokens = await GetOrLoadTokensAsync(steamId64, true);
-            PlayerToken oldPlayerToken;
+            PlayerTokenInfo? existingToken;
 
             lock (tokens)
             {
-                if (tokens.TryGetValue(normalizedOldToken, out oldPlayerToken) is not true) return false;
+                tokens.TryGetValue(normalizedOldToken, out existingToken);
             }
+
+            if (existingToken is null) return false;
 
             await using var dbConnection = CreateDbConnection();
             await dbConnection.OpenAsync();
             await using var transaction = await dbConnection.BeginTransactionAsync();
 
             await dbConnection.ExecuteAsync($@"
-                DELETE FROM `{TokensManagerConfig.TableName}`
-                WHERE `steamid64` = @SteamId64 AND `token` = @OldToken;", new { SteamId64 = steamId64, OldToken = normalizedOldToken }, transaction);
-
-            await dbConnection.ExecuteAsync($@"
-                INSERT INTO `{TokensManagerConfig.TableName}` (`steamid64`, `token`, `uses_left`, `is_used`)
-                VALUES (@SteamId64, @NewToken, @UsesLeft, @IsUsed)
-                ON DUPLICATE KEY UPDATE `uses_left` = VALUES(`uses_left`), `is_used` = VALUES(`is_used`);", new
+                UPDATE `{TokensManagerConfig.TableName}`
+                SET `active` = 0, `inactive_reason` = @InactiveReason
+                WHERE `steamid64` = @SteamId64 AND `token` = @OldToken;", new
             {
                 SteamId64 = steamId64,
-                NewToken = normalizedNewToken,
-                UsesLeft = oldPlayerToken.UsesLeft,
-                IsUsed = oldPlayerToken.IsUsed
+                OldToken = normalizedOldToken,
+                InactiveReason = TokenInactiveReason.Replaced.ToString()
             }, transaction);
 
-            await transaction.CommitAsync();
-
-            lock (tokens)
-            {
-                tokens.Remove(normalizedOldToken);
-                tokens[normalizedNewToken] = oldPlayerToken with { Token = normalizedNewToken };
-            }
-
-            return true;
-        }
-        catch (Exception e)
-        {
-            logger.LogError(e, "Failed to update token {oldToken} to {newToken} for {steamId64}.", normalizedOldToken, normalizedNewToken, steamId64);
-            return false;
-        }
-        finally
-        {
-            playerLock.Release();
-        }
-    }
-
-    public Task<bool> SetTokensAsync(IDeathrunPlayer deathrunPlayer, IEnumerable<string> tokens)
-        => SetTokensAsync(GetSteamId64(deathrunPlayer), tokens);
-
-    public async Task<bool> SetTokensAsync(ulong steamId64, IEnumerable<string> tokens)
-    {
-        if (CanUseSteamId64(steamId64) is not true) return false;
-
-        var normalizedTokens = NormalizeTokens(tokens);
-        var playerLock = GetPlayerLock(steamId64);
-        await playerLock.WaitAsync();
-
-        try
-        {
-            await using var dbConnection = CreateDbConnection();
-            await dbConnection.OpenAsync();
-            await using var transaction = await dbConnection.BeginTransactionAsync();
-
             await dbConnection.ExecuteAsync($@"
-                DELETE FROM `{TokensManagerConfig.TableName}`
-                WHERE `steamid64` = @SteamId64;", new { SteamId64 = steamId64 }, transaction);
-
-            foreach (var token in normalizedTokens)
-            {
-                await dbConnection.ExecuteAsync($@"
-                    INSERT IGNORE INTO `{TokensManagerConfig.TableName}` (`steamid64`, `token`, `uses_left`, `is_used`)
-                    VALUES (@SteamId64, @Token, NULL, 0);", new { SteamId64 = steamId64, Token = token }, transaction);
-            }
+                INSERT INTO `{TokensManagerConfig.TableName}`
+                    (`steamid64`, `token`, `active`, `remaining_uses`, `active_till`, `inactive_reason`, `metadata_json`)
+                VALUES
+                    (@SteamId64, @Token, @Active, @RemainingUses, @ActiveTillUtc, @InactiveReason, @MetadataJson)
+                ON DUPLICATE KEY UPDATE
+                    `active` = VALUES(`active`),
+                    `remaining_uses` = VALUES(`remaining_uses`),
+                    `active_till` = VALUES(`active_till`),
+                    `inactive_reason` = VALUES(`inactive_reason`),
+                    `metadata_json` = VALUES(`metadata_json`);", ToDbParams(existingToken with { Token = normalizedNewToken }), transaction);
 
             await transaction.CommitAsync();
-
-            _tokensCache[steamId64] = normalizedTokens
-                .ToDictionary(token => token, token => new PlayerToken(token, null, false), TokenComparer);
-
+            ClearCachedTokens(steamId64);
             return true;
         }
         catch (Exception e)
         {
-            logger.LogError(e, "Failed to set tokens for {steamId64}.", steamId64);
+            logger.LogError(e, "Failed to rename token {oldToken} to {newToken} for {steamId64}.", normalizedOldToken, normalizedNewToken, steamId64);
+            ClearCachedTokens(steamId64);
             return false;
         }
         finally
@@ -282,88 +313,12 @@ internal sealed class TokensManager(
         }
     }
 
-    public Task<bool> SetTokenUnlimitedUsesAsync(IDeathrunPlayer deathrunPlayer, string token)
-        => SetTokenUnlimitedUsesAsync(GetSteamId64(deathrunPlayer), token);
+    public Task<bool> RevokeTokenAsync(IDeathrunPlayer deathrunPlayer, string token, string? reason = null)
+        => RevokeTokenAsync(GetSteamId64(deathrunPlayer), token, reason);
 
-    public Task<bool> SetTokenUnlimitedUsesAsync(ulong steamId64, string token)
-        => SetTokenUsesInternalAsync(steamId64, token, null);
-
-    public Task<bool> SetTokenUsesAsync(IDeathrunPlayer deathrunPlayer, string token, int usesLeft)
-        => SetTokenUsesAsync(GetSteamId64(deathrunPlayer), token, usesLeft);
-
-    public Task<bool> SetTokenUsesAsync(ulong steamId64, string token, int usesLeft)
-        => usesLeft <= 0 ? Task.FromResult(false) : SetTokenUsesInternalAsync(steamId64, token, usesLeft);
-
-    public Task<int> GetTokenUsesLeftAsync(IDeathrunPlayer deathrunPlayer, string token)
-        => GetTokenUsesLeftAsync(GetSteamId64(deathrunPlayer), token);
-
-    public async Task<int> GetTokenUsesLeftAsync(ulong steamId64, string token)
+    public async Task<bool> RevokeTokenAsync(ulong steamId64, string token, string? reason = null)
     {
         if (CanUseSteamId64(steamId64) is not true || TryNormalizeToken(token, out var normalizedToken) is not true)
-        {
-            return 0;
-        }
-
-        var tokens = await GetOrLoadTokensAsync(steamId64);
-
-        lock (tokens)
-        {
-            if (tokens.TryGetValue(normalizedToken, out var playerToken) is not true) return 0;
-
-            return playerToken.UsesLeft ?? -1;
-        }
-    }
-
-    public Task<IReadOnlyCollection<string>> GetUsedTokensAsync(IDeathrunPlayer deathrunPlayer)
-        => GetUsedTokensAsync(GetSteamId64(deathrunPlayer));
-
-    public async Task<IReadOnlyCollection<string>> GetUsedTokensAsync(ulong steamId64)
-    {
-        if (CanUseSteamId64(steamId64) is not true) return Array.Empty<string>();
-
-        var tokens = await GetOrLoadTokensAsync(steamId64);
-
-        lock (tokens)
-        {
-            return tokens.Values
-                .Where(playerToken => playerToken.IsUsed)
-                .Select(playerToken => playerToken.Token)
-                .ToArray();
-        }
-    }
-
-    public Task<bool> IsTokenUsedAsync(IDeathrunPlayer deathrunPlayer, string token)
-        => IsTokenUsedAsync(GetSteamId64(deathrunPlayer), token);
-
-    public async Task<bool> IsTokenUsedAsync(ulong steamId64, string token)
-    {
-        if (CanUseSteamId64(steamId64) is not true || TryNormalizeToken(token, out var normalizedToken) is not true)
-        {
-            return false;
-        }
-
-        var tokens = await GetOrLoadTokensAsync(steamId64);
-
-        lock (tokens)
-        {
-            return tokens.TryGetValue(normalizedToken, out var playerToken) && playerToken.IsUsed;
-        }
-    }
-
-    public Task<bool> TryUseTokenAsync(IDeathrunPlayer deathrunPlayer, string token)
-        => TryUseTokenAsync(GetSteamId64(deathrunPlayer), token);
-
-    public Task<bool> TryUseTokenAsync(ulong steamId64, string token)
-        => TryUseTokenAsync(steamId64, token, 1);
-
-    public Task<bool> TryUseTokenAsync(IDeathrunPlayer deathrunPlayer, string token, int usesToSpend)
-        => TryUseTokenAsync(GetSteamId64(deathrunPlayer), token, usesToSpend);
-
-    public async Task<bool> TryUseTokenAsync(ulong steamId64, string token, int usesToSpend)
-    {
-        if (CanUseSteamId64(steamId64) is not true
-            || usesToSpend <= 0
-            || TryNormalizeToken(token, out var normalizedToken) is not true)
         {
             return false;
         }
@@ -373,83 +328,193 @@ internal sealed class TokensManager(
 
         try
         {
+            await using var dbConnection = CreateDbConnection();
+            await dbConnection.OpenAsync();
+
+            var affectedRows = await dbConnection.ExecuteAsync($@"
+                UPDATE `{TokensManagerConfig.TableName}`
+                SET `active` = 0,
+                    `inactive_reason` = @InactiveReason
+                WHERE `steamid64` = @SteamId64 AND `token` = @Token;", new
+            {
+                SteamId64 = steamId64,
+                Token = normalizedToken,
+                InactiveReason = string.IsNullOrWhiteSpace(reason) ? TokenInactiveReason.Revoked.ToString() : reason.Trim()
+            });
+
+            ClearCachedTokens(steamId64);
+            return affectedRows > 0;
+        }
+        catch (Exception e)
+        {
+            logger.LogError(e, "Failed to revoke token {token} for {steamId64}.", normalizedToken, steamId64);
+            ClearCachedTokens(steamId64);
+            return false;
+        }
+        finally
+        {
+            playerLock.Release();
+        }
+    }
+
+    public Task<bool> DeleteTokenAsync(IDeathrunPlayer deathrunPlayer, string token)
+        => DeleteTokenAsync(GetSteamId64(deathrunPlayer), token);
+
+    public async Task<bool> DeleteTokenAsync(ulong steamId64, string token)
+    {
+        if (CanUseSteamId64(steamId64) is not true || TryNormalizeToken(token, out var normalizedToken) is not true)
+        {
+            return false;
+        }
+
+        var playerLock = GetPlayerLock(steamId64);
+        await playerLock.WaitAsync();
+
+        try
+        {
+            await using var dbConnection = CreateDbConnection();
+            await dbConnection.OpenAsync();
+
+            var affectedRows = await dbConnection.ExecuteAsync($@"
+                DELETE FROM `{TokensManagerConfig.TableName}`
+                WHERE `steamid64` = @SteamId64 AND `token` = @Token;", new
+            {
+                SteamId64 = steamId64,
+                Token = normalizedToken
+            });
+
+            ClearCachedTokens(steamId64);
+            return affectedRows > 0;
+        }
+        catch (Exception e)
+        {
+            logger.LogError(e, "Failed to delete token {token} for {steamId64}.", normalizedToken, steamId64);
+            ClearCachedTokens(steamId64);
+            return false;
+        }
+        finally
+        {
+            playerLock.Release();
+        }
+    }
+
+    public Task<bool> SetTokenUsesAsync(IDeathrunPlayer deathrunPlayer, string token, int? remainingUses)
+        => SetTokenUsesAsync(GetSteamId64(deathrunPlayer), token, remainingUses);
+
+    public async Task<bool> SetTokenUsesAsync(ulong steamId64, string token, int? remainingUses)
+    {
+        if (CanUseSteamId64(steamId64) is not true || TryNormalizeToken(token, out var normalizedToken) is not true || IsValidRemainingUses(remainingUses) is not true)
+        {
+            return false;
+        }
+
+        var inactiveReason = remainingUses <= 0 ? TokenInactiveReason.Consumed.ToString() : null;
+        var active = remainingUses is null or > 0;
+
+        return await UpdateTokenFieldsAsync(steamId64, normalizedToken, new
+        {
+            Active = active,
+            RemainingUses = remainingUses,
+            InactiveReason = inactiveReason
+        }, $@"
+            `active` = @Active,
+            `remaining_uses` = @RemainingUses,
+            `inactive_reason` = @InactiveReason");
+    }
+
+    public Task<bool> SetTokenActiveTillAsync(IDeathrunPlayer deathrunPlayer, string token, DateTime? activeTillUtc)
+        => SetTokenActiveTillAsync(GetSteamId64(deathrunPlayer), token, activeTillUtc);
+
+    public async Task<bool> SetTokenActiveTillAsync(ulong steamId64, string token, DateTime? activeTillUtc)
+    {
+        if (CanUseSteamId64(steamId64) is not true || TryNormalizeToken(token, out var normalizedToken) is not true || IsValidActiveTill(activeTillUtc) is not true)
+        {
+            return false;
+        }
+
+        var active = activeTillUtc is null || activeTillUtc.Value > DateTime.UtcNow;
+        var inactiveReason = active ? null : TokenInactiveReason.Expired.ToString();
+
+        return await UpdateTokenFieldsAsync(steamId64, normalizedToken, new
+        {
+            Active = active,
+            ActiveTillUtc = activeTillUtc,
+            InactiveReason = inactiveReason
+        }, $@"
+            `active` = @Active,
+            `active_till` = @ActiveTillUtc,
+            `inactive_reason` = @InactiveReason");
+    }
+
+    public Task<TokenConsumeResult> ConsumeTokenAsync(IDeathrunPlayer deathrunPlayer, string token, int uses = 1)
+        => ConsumeTokenAsync(GetSteamId64(deathrunPlayer), token, uses);
+
+    public async Task<TokenConsumeResult> ConsumeTokenAsync(ulong steamId64, string token, int uses = 1)
+    {
+        if (CanUseSteamId64(steamId64) is not true) return TokenConsumeResult.SkippedInvalidSteamId;
+        if (uses <= 0 || TryNormalizeToken(token, out var normalizedToken) is not true) return TokenConsumeResult.InvalidRequest;
+
+        var playerLock = GetPlayerLock(steamId64);
+        await playerLock.WaitAsync();
+
+        try
+        {
+            await RefreshTokenStatesAsync(steamId64);
             var tokens = await GetOrLoadTokensAsync(steamId64, true);
-            PlayerToken playerToken;
+            PlayerTokenInfo? playerToken;
 
             lock (tokens)
             {
-                if (tokens.TryGetValue(normalizedToken, out playerToken) is not true) return false;
-                if (CanSpendUses(playerToken, usesToSpend) is not true) return false;
+                tokens.TryGetValue(normalizedToken, out playerToken);
             }
 
-            if (playerToken.IsUnlimited) return true;
+            if (playerToken is null) return TokenConsumeResult.Missing;
+            if (playerToken.ActiveTillUtc is not null && playerToken.ActiveTillUtc.Value <= DateTime.UtcNow) return TokenConsumeResult.Expired;
+            if (playerToken.Active is not true) return TokenConsumeResult.Inactive;
+            if (playerToken.RemainingUses is null) return TokenConsumeResult.Unlimited;
+            if (playerToken.RemainingUses < uses) return TokenConsumeResult.InsufficientUses;
 
-            var newUsesLeft = playerToken.UsesLeft!.Value - usesToSpend;
+            var newUses = playerToken.RemainingUses.Value - uses;
+            var newActive = newUses > 0;
+            var inactiveReason = newActive ? null : TokenInactiveReason.Consumed.ToString();
 
             await using var dbConnection = CreateDbConnection();
             await dbConnection.OpenAsync();
 
-            if (newUsesLeft <= 0)
+            var affectedRows = await dbConnection.ExecuteAsync($@"
+                UPDATE `{TokensManagerConfig.TableName}`
+                SET `remaining_uses` = @RemainingUses,
+                    `active` = @Active,
+                    `inactive_reason` = @InactiveReason
+                WHERE `steamid64` = @SteamId64
+                  AND `token` = @Token
+                  AND `active` = 1
+                  AND `remaining_uses` IS NOT NULL
+                  AND `remaining_uses` >= @Uses
+                  AND (`active_till` IS NULL OR `active_till` > UTC_TIMESTAMP());", new
             {
-                var affectedRows = await dbConnection.ExecuteAsync($@"
-                    UPDATE `{TokensManagerConfig.TableName}`
-                    SET `uses_left` = 0, `is_used` = 1
-                    WHERE `steamid64` = @SteamId64
-                      AND `token` = @Token
-                      AND `is_used` = 0
-                      AND `uses_left` IS NOT NULL
-                      AND `uses_left` >= @UsesToSpend;", new
-                {
-                    SteamId64 = steamId64,
-                    Token = normalizedToken,
-                    UsesToSpend = usesToSpend
-                });
+                SteamId64 = steamId64,
+                Token = normalizedToken,
+                Uses = uses,
+                RemainingUses = newUses,
+                Active = newActive,
+                InactiveReason = inactiveReason
+            });
 
-                if (affectedRows <= 0)
-                {
-                    ClearCachedTokens(steamId64);
-                    return false;
-                }
-
-                lock (tokens)
-                {
-                    tokens[normalizedToken] = playerToken with { UsesLeft = 0, IsUsed = true };
-                }
-            }
-            else
+            if (affectedRows <= 0)
             {
-                var affectedRows = await dbConnection.ExecuteAsync($@"
-                    UPDATE `{TokensManagerConfig.TableName}`
-                    SET `uses_left` = `uses_left` - @UsesToSpend
-                    WHERE `steamid64` = @SteamId64
-                      AND `token` = @Token
-                      AND `is_used` = 0
-                      AND `uses_left` IS NOT NULL
-                      AND `uses_left` >= @UsesToSpend;", new
-                {
-                    SteamId64 = steamId64,
-                    Token = normalizedToken,
-                    UsesToSpend = usesToSpend
-                });
-
-                if (affectedRows <= 0)
-                {
-                    ClearCachedTokens(steamId64);
-                    return false;
-                }
-
-                lock (tokens)
-                {
-                    tokens[normalizedToken] = playerToken with { UsesLeft = newUsesLeft, IsUsed = false };
-                }
+                ClearCachedTokens(steamId64);
+                return TokenConsumeResult.Inactive;
             }
 
-            return true;
+            ClearCachedTokens(steamId64);
+            return TokenConsumeResult.Consumed;
         }
         catch (Exception e)
         {
-            logger.LogError(e, "Failed to use token {token} for {steamId64}.", normalizedToken, steamId64);
-            return false;
+            logger.LogError(e, "Failed to consume token {token} for {steamId64}.", normalizedToken, steamId64);
+            ClearCachedTokens(steamId64);
+            return TokenConsumeResult.InvalidRequest;
         }
         finally
         {
@@ -457,97 +522,111 @@ internal sealed class TokensManager(
         }
     }
 
-    public Task<bool> TryUseTokensAsync(IDeathrunPlayer deathrunPlayer, IEnumerable<string> tokens, bool requireAllTokens = true)
-        => TryUseTokensAsync(GetSteamId64(deathrunPlayer), tokens, requireAllTokens);
+    public Task<TokenConsumeBatchResult> ConsumeTokensAsync(IDeathrunPlayer deathrunPlayer, IEnumerable<TokenSpend> tokens, bool requireAll = true)
+        => ConsumeTokensAsync(GetSteamId64(deathrunPlayer), tokens, requireAll);
 
-    public async Task<bool> TryUseTokensAsync(ulong steamId64, IEnumerable<string> tokens, bool requireAllTokens = true)
+    public async Task<TokenConsumeBatchResult> ConsumeTokensAsync(ulong steamId64, IEnumerable<TokenSpend> tokens, bool requireAll = true)
     {
-        if (CanUseSteamId64(steamId64) is not true) return false;
+        if (CanUseSteamId64(steamId64) is not true)
+        {
+            return new TokenConsumeBatchResult(false, new Dictionary<string, TokenConsumeResult>());
+        }
 
-        var normalizedTokens = NormalizeTokens(tokens);
-        if (normalizedTokens.Count is 0) return false;
+        var spends = NormalizeSpends(tokens);
+        if (spends.Count is 0) return TokenConsumeBatchResult.Empty;
 
         var playerLock = GetPlayerLock(steamId64);
         await playerLock.WaitAsync();
 
         try
         {
+            await RefreshTokenStatesAsync(steamId64);
             var cachedTokens = await GetOrLoadTokensAsync(steamId64, true);
-            List<PlayerToken> usableTokens;
+            var results = new Dictionary<string, TokenConsumeResult>(TokenComparer);
+            var spendableTokens = new List<(PlayerTokenInfo Token, int Uses)>();
 
             lock (cachedTokens)
             {
-                usableTokens = normalizedTokens
-                    .Where(token => cachedTokens.TryGetValue(token, out var playerToken) && CanSpendUses(playerToken, 1))
-                    .Select(token => cachedTokens[token])
-                    .ToList();
-
-                if (requireAllTokens is true && usableTokens.Count != normalizedTokens.Count)
+                foreach (var spend in spends)
                 {
-                    return false;
-                }
+                    if (cachedTokens.TryGetValue(spend.Token, out var playerToken) is not true)
+                    {
+                        results[spend.Token] = TokenConsumeResult.Missing;
+                        continue;
+                    }
 
-                if (requireAllTokens is not true && usableTokens.Count is 0)
-                {
-                    return false;
+                    var validation = ValidateSpend(playerToken, spend.Uses);
+                    results[spend.Token] = validation;
+
+                    if (validation is TokenConsumeResult.Consumed or TokenConsumeResult.Unlimited)
+                    {
+                        spendableTokens.Add((playerToken, spend.Uses));
+                    }
                 }
             }
 
-            var limitedTokensToSpend = usableTokens
-                .Where(playerToken => playerToken.IsUnlimited is not true)
+            if (requireAll && results.Values.Any(result => result is not TokenConsumeResult.Consumed and not TokenConsumeResult.Unlimited))
+            {
+                return new TokenConsumeBatchResult(false, results);
+            }
+
+            if (spendableTokens.Count is 0) return new TokenConsumeBatchResult(false, results);
+
+            var limitedTokens = spendableTokens
+                .Where(entry => entry.Token.RemainingUses is not null)
                 .ToArray();
 
-            if (limitedTokensToSpend.Length is 0) return true;
+            if (limitedTokens.Length is 0)
+            {
+                return new TokenConsumeBatchResult(true, results);
+            }
 
             await using var dbConnection = CreateDbConnection();
             await dbConnection.OpenAsync();
             await using var transaction = await dbConnection.BeginTransactionAsync();
 
-            foreach (var playerToken in limitedTokensToSpend)
+            foreach (var (playerToken, uses) in limitedTokens)
             {
+                var newUses = playerToken.RemainingUses!.Value - uses;
+                var newActive = newUses > 0;
                 var affectedRows = await dbConnection.ExecuteAsync($@"
                     UPDATE `{TokensManagerConfig.TableName}`
-                    SET `uses_left` = GREATEST(`uses_left` - 1, 0),
-                        `is_used` = CASE WHEN `uses_left` - 1 <= 0 THEN 1 ELSE 0 END
+                    SET `remaining_uses` = @RemainingUses,
+                        `active` = @Active,
+                        `inactive_reason` = @InactiveReason
                     WHERE `steamid64` = @SteamId64
                       AND `token` = @Token
-                      AND `is_used` = 0
-                      AND `uses_left` IS NOT NULL
-                      AND `uses_left` >= 1;", new
+                      AND `active` = 1
+                      AND `remaining_uses` IS NOT NULL
+                      AND `remaining_uses` >= @Uses
+                      AND (`active_till` IS NULL OR `active_till` > UTC_TIMESTAMP());", new
                 {
                     SteamId64 = steamId64,
-                    playerToken.Token
+                    playerToken.Token,
+                    Uses = uses,
+                    RemainingUses = newUses,
+                    Active = newActive,
+                    InactiveReason = newActive ? null : TokenInactiveReason.Consumed.ToString()
                 }, transaction);
 
                 if (affectedRows <= 0)
                 {
                     await transaction.RollbackAsync();
                     ClearCachedTokens(steamId64);
-                    return false;
+                    results[playerToken.Token] = TokenConsumeResult.Inactive;
+                    return new TokenConsumeBatchResult(false, results);
                 }
             }
-
 
             await transaction.CommitAsync();
-
-            lock (cachedTokens)
-            {
-                foreach (var playerToken in limitedTokensToSpend)
-                {
-                    var newUsesLeft = playerToken.UsesLeft!.Value - 1;
-
-                    cachedTokens[playerToken.Token] = newUsesLeft <= 0
-                        ? playerToken with { UsesLeft = 0, IsUsed = true }
-                        : playerToken with { UsesLeft = newUsesLeft, IsUsed = false };
-                }
-            }
-
-            return true;
+            ClearCachedTokens(steamId64);
+            return new TokenConsumeBatchResult(true, results);
         }
         catch (Exception e)
         {
-            logger.LogError(e, "Failed to use tokens for {steamId64}.", steamId64);
-            return false;
+            logger.LogError(e, "Failed to consume token batch for {steamId64}.", steamId64);
+            ClearCachedTokens(steamId64);
+            return new TokenConsumeBatchResult(false, spends.ToDictionary(spend => spend.Token, _ => TokenConsumeResult.InvalidRequest, TokenComparer));
         }
         finally
         {
@@ -555,114 +634,70 @@ internal sealed class TokensManager(
         }
     }
 
-    public Task<bool> HasTokenAsync(IDeathrunPlayer deathrunPlayer, string token)
-        => HasTokenAsync(GetSteamId64(deathrunPlayer), token);
+    #endregion
 
-    public async Task<bool> HasTokenAsync(ulong steamId64, string token)
+    #region State refresh
+
+    public Task<int> RefreshTokenStatesAsync(IDeathrunPlayer deathrunPlayer)
+        => RefreshTokenStatesAsync(GetSteamId64(deathrunPlayer));
+
+    public async Task<int> RefreshTokenStatesAsync(ulong steamId64)
     {
-        if (CanUseSteamId64(steamId64) is not true || TryNormalizeToken(token, out var normalizedToken) is not true)
-        {
-            return false;
-        }
+        if (CanUseSteamId64(steamId64) is not true) return 0;
 
-        var tokens = await GetOrLoadTokensAsync(steamId64);
+        await using var dbConnection = CreateDbConnection();
+        await dbConnection.OpenAsync();
 
-        lock (tokens)
+        var affectedRows = await dbConnection.ExecuteAsync($@"
+            UPDATE `{TokensManagerConfig.TableName}`
+            SET `active` = 0,
+                `inactive_reason` = CASE
+                    WHEN `remaining_uses` IS NOT NULL AND `remaining_uses` <= 0 THEN @Consumed
+                    WHEN `active_till` IS NOT NULL AND `active_till` <= UTC_TIMESTAMP() THEN @Expired
+                    ELSE `inactive_reason`
+                END
+            WHERE `steamid64` = @SteamId64
+              AND `active` = 1
+              AND ((`remaining_uses` IS NOT NULL AND `remaining_uses` <= 0)
+                   OR (`active_till` IS NOT NULL AND `active_till` <= UTC_TIMESTAMP()));", new
         {
-            return tokens.TryGetValue(normalizedToken, out var playerToken) && playerToken.IsUsed is not true;
-        }
+            SteamId64 = steamId64,
+            Consumed = TokenInactiveReason.Consumed.ToString(),
+            Expired = TokenInactiveReason.Expired.ToString()
+        });
+
+        if (affectedRows > 0) ClearCachedTokens(steamId64);
+        return affectedRows;
     }
 
-    public Task<bool> HasTokenUsesAsync(IDeathrunPlayer deathrunPlayer, string token, int requiredUses)
-        => HasTokenUsesAsync(GetSteamId64(deathrunPlayer), token, requiredUses);
-
-    public async Task<bool> HasTokenUsesAsync(ulong steamId64, string token, int requiredUses)
+    public async Task<int> RefreshExpiredTokensAsync()
     {
-        if (CanUseSteamId64(steamId64) is not true
-            || requiredUses <= 0
-            || TryNormalizeToken(token, out var normalizedToken) is not true)
-        {
-            return false;
-        }
+        await using var dbConnection = CreateDbConnection();
+        await dbConnection.OpenAsync();
 
-        var tokens = await GetOrLoadTokensAsync(steamId64);
-
-        lock (tokens)
+        var affectedRows = await dbConnection.ExecuteAsync($@"
+            UPDATE `{TokensManagerConfig.TableName}`
+            SET `active` = 0,
+                `inactive_reason` = CASE
+                    WHEN `remaining_uses` IS NOT NULL AND `remaining_uses` <= 0 THEN @Consumed
+                    WHEN `active_till` IS NOT NULL AND `active_till` <= UTC_TIMESTAMP() THEN @Expired
+                    ELSE `inactive_reason`
+                END
+            WHERE `active` = 1
+              AND ((`remaining_uses` IS NOT NULL AND `remaining_uses` <= 0)
+                   OR (`active_till` IS NOT NULL AND `active_till` <= UTC_TIMESTAMP()));", new
         {
-            return tokens.TryGetValue(normalizedToken, out var playerToken)
-                   && CanSpendUses(playerToken, requiredUses);
-        }
+            Consumed = TokenInactiveReason.Consumed.ToString(),
+            Expired = TokenInactiveReason.Expired.ToString()
+        });
+
+        if (affectedRows > 0) ClearCache();
+        return affectedRows;
     }
 
-    public Task<bool> HasAllTokensAsync(IDeathrunPlayer deathrunPlayer, IEnumerable<string> tokens)
-        => HasAllTokensAsync(GetSteamId64(deathrunPlayer), tokens);
+    #endregion
 
-    public async Task<bool> HasAllTokensAsync(ulong steamId64, IEnumerable<string> tokens)
-    {
-        if (CanUseSteamId64(steamId64) is not true) return false;
-
-        var normalizedTokens = NormalizeTokens(tokens);
-        if (normalizedTokens.Count is 0) return true;
-
-        var cachedTokens = await GetOrLoadTokensAsync(steamId64);
-
-        lock (cachedTokens)
-        {
-            return normalizedTokens.All(token => cachedTokens.TryGetValue(token, out var playerToken) && playerToken.IsUsed is not true);
-        }
-    }
-
-    public Task<bool> HasAnyTokenAsync(IDeathrunPlayer deathrunPlayer, IEnumerable<string> tokens)
-        => HasAnyTokenAsync(GetSteamId64(deathrunPlayer), tokens);
-
-    public async Task<bool> HasAnyTokenAsync(ulong steamId64, IEnumerable<string> tokens)
-    {
-        if (CanUseSteamId64(steamId64) is not true) return false;
-
-        var normalizedTokens = NormalizeTokens(tokens);
-        if (normalizedTokens.Count is 0) return false;
-
-        var cachedTokens = await GetOrLoadTokensAsync(steamId64);
-
-        lock (cachedTokens)
-        {
-            return normalizedTokens.Any(token => cachedTokens.TryGetValue(token, out var playerToken) && playerToken.IsUsed is not true);
-        }
-    }
-
-    public Task<bool> MatchesTokensAsync(
-        IDeathrunPlayer deathrunPlayer,
-        IEnumerable<string>? requiredTokens = null,
-        IEnumerable<string>? excludedTokens = null,
-        bool requireAllRequiredTokens = true)
-        => MatchesTokensAsync(GetSteamId64(deathrunPlayer), requiredTokens, excludedTokens, requireAllRequiredTokens);
-
-    public async Task<bool> MatchesTokensAsync(
-        ulong steamId64,
-        IEnumerable<string>? requiredTokens = null,
-        IEnumerable<string>? excludedTokens = null,
-        bool requireAllRequiredTokens = true)
-    {
-        if (CanUseSteamId64(steamId64) is not true) return false;
-
-        var normalizedRequiredTokens = NormalizeTokens(requiredTokens ?? Array.Empty<string>());
-        var normalizedExcludedTokens = NormalizeTokens(excludedTokens ?? Array.Empty<string>());
-        var cachedTokens = await GetOrLoadTokensAsync(steamId64);
-
-        lock (cachedTokens)
-        {
-            if (normalizedExcludedTokens.Count > 0 && normalizedExcludedTokens.Any(token => cachedTokens.TryGetValue(token, out var playerToken) && playerToken.IsUsed is not true))
-            {
-                return false;
-            }
-
-            if (normalizedRequiredTokens.Count is 0) return true;
-
-            return requireAllRequiredTokens
-                ? normalizedRequiredTokens.All(token => cachedTokens.TryGetValue(token, out var playerToken) && playerToken.IsUsed is not true)
-                : normalizedRequiredTokens.Any(token => cachedTokens.TryGetValue(token, out var playerToken) && playerToken.IsUsed is not true);
-        }
-    }
+    #region Cache
 
     public void ClearCachedTokens(ulong steamId64)
         => _tokensCache.TryRemove(steamId64, out _);
@@ -670,236 +705,14 @@ internal sealed class TokensManager(
     public void ClearCache()
         => _tokensCache.Clear();
 
-    #endregion
-
-    #region Internal mutation helpers
-
-    private async Task<bool> AddTokenInternalAsync(ulong steamId64, string token, int? usesLeft)
-    {
-        if (CanUseSteamId64(steamId64) is not true
-            || TryNormalizeToken(token, out var normalizedToken) is not true
-            || IsValidUsesLeft(usesLeft) is not true)
-        {
-            return false;
-        }
-
-        var playerLock = GetPlayerLock(steamId64);
-        await playerLock.WaitAsync();
-
-        try
-        {
-            var tokens = await GetOrLoadTokensAsync(steamId64, true);
-
-            var shouldReactivateUsedToken = false;
-
-            lock (tokens)
-            {
-                if (tokens.TryGetValue(normalizedToken, out var existingToken))
-                {
-                    if (existingToken.IsUsed is not true) return false;
-                    shouldReactivateUsedToken = true;
-                }
-            }
-
-            await using var dbConnection = CreateDbConnection();
-            await dbConnection.OpenAsync();
-
-            var affectedRows = await dbConnection.ExecuteAsync($@"
-                INSERT INTO `{TokensManagerConfig.TableName}` (`steamid64`, `token`, `uses_left`, `is_used`)
-                VALUES (@SteamId64, @Token, @UsesLeft, 0)
-                ON DUPLICATE KEY UPDATE
-                    `uses_left` = CASE WHEN `is_used` = 1 THEN VALUES(`uses_left`) ELSE `uses_left` END,
-                    `is_used` = CASE WHEN `is_used` = 1 THEN 0 ELSE `is_used` END;", new
-            {
-                SteamId64 = steamId64,
-                Token = normalizedToken,
-                UsesLeft = usesLeft
-            });
-
-            if (affectedRows <= 0 && shouldReactivateUsedToken is not true) return false;
-
-            lock (tokens)
-            {
-                tokens[normalizedToken] = new PlayerToken(normalizedToken, usesLeft, false);
-            }
-
-            return true;
-        }
-        catch (Exception e)
-        {
-            logger.LogError(e, "Failed to add token {token} to {steamId64}.", normalizedToken, steamId64);
-            return false;
-        }
-        finally
-        {
-            playerLock.Release();
-        }
-    }
-
-    private async Task<int> AddTokensInternalAsync(ulong steamId64, IEnumerable<string> tokens, int? usesLeft)
-    {
-        if (CanUseSteamId64(steamId64) is not true || IsValidUsesLeft(usesLeft) is not true) return 0;
-
-        var normalizedTokens = NormalizeTokens(tokens);
-        if (normalizedTokens.Count is 0) return 0;
-
-        var added = 0;
-        foreach (var token in normalizedTokens)
-        {
-            if (await AddTokenInternalAsync(steamId64, token, usesLeft) is true) added++;
-        }
-
-        return added;
-    }
-
-    private async Task<bool> SetTokenUsesInternalAsync(ulong steamId64, string token, int? usesLeft)
-    {
-        if (CanUseSteamId64(steamId64) is not true
-            || TryNormalizeToken(token, out var normalizedToken) is not true
-            || IsValidUsesLeft(usesLeft) is not true)
-        {
-            return false;
-        }
-
-        var playerLock = GetPlayerLock(steamId64);
-        await playerLock.WaitAsync();
-
-        try
-        {
-            var tokens = await GetOrLoadTokensAsync(steamId64, true);
-
-            lock (tokens)
-            {
-                if (tokens.ContainsKey(normalizedToken) is not true) return false;
-            }
-
-            await using var dbConnection = CreateDbConnection();
-            await dbConnection.OpenAsync();
-
-            var affectedRows = await dbConnection.ExecuteAsync($@"
-                UPDATE `{TokensManagerConfig.TableName}`
-                SET `uses_left` = @UsesLeft, `is_used` = 0
-                WHERE `steamid64` = @SteamId64 AND `token` = @Token;", new
-            {
-                SteamId64 = steamId64,
-                Token = normalizedToken,
-                UsesLeft = usesLeft
-            });
-
-            if (affectedRows <= 0) return false;
-
-            lock (tokens)
-            {
-                tokens[normalizedToken] = new PlayerToken(normalizedToken, usesLeft, false);
-            }
-
-            return true;
-        }
-        catch (Exception e)
-        {
-            logger.LogError(e, "Failed to set token uses for {token} on {steamId64}.", normalizedToken, steamId64);
-            return false;
-        }
-        finally
-        {
-            playerLock.Release();
-        }
-    }
-
-    #endregion
-
-    #region Tables
-
-    private void SetupDatabaseTables()
-    {
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await using var dbConnection = CreateDbConnection();
-                await dbConnection.OpenAsync();
-
-                await dbConnection.ExecuteAsync($@"
-                    CREATE TABLE IF NOT EXISTS `{TokensManagerConfig.TableName}`
-                    (
-                        `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-                        `steamid64` BIGINT UNSIGNED NOT NULL,
-                        `token` VARCHAR(128) NOT NULL,
-                        `uses_left` INT NULL DEFAULT NULL,
-                        `is_used` TINYINT(1) NOT NULL DEFAULT 0,
-                        `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                        `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-
-                        PRIMARY KEY (`id`),
-                        UNIQUE KEY `uq_{TokensManagerConfig.TableName}_steamid64_token` (`steamid64`, `token`),
-                        KEY `idx_{TokensManagerConfig.TableName}_steamid64` (`steamid64`),
-                        KEY `idx_{TokensManagerConfig.TableName}_token` (`token`)
-                    );");
-
-                await EnsureUsesLeftColumnAsync(dbConnection);
-                await EnsureIsUsedColumnAsync(dbConnection);
-                await MarkDepletedLimitedTokensAsUsedAsync(dbConnection);
-            }
-            catch (Exception e)
-            {
-                logger.LogError(e, "Failed to create Tokens Manager database table.");
-            }
-        });
-    }
-
-    private static async Task EnsureUsesLeftColumnAsync(MySqlConnection dbConnection)
-    {
-        var columnExists = await dbConnection.ExecuteScalarAsync<int>($@"
-            SELECT COUNT(*)
-            FROM INFORMATION_SCHEMA.COLUMNS
-            WHERE TABLE_SCHEMA = DATABASE()
-              AND TABLE_NAME = @TableName
-              AND COLUMN_NAME = 'uses_left';", new { TokensManagerConfig.TableName });
-
-        if (columnExists > 0) return;
-
-        await dbConnection.ExecuteAsync($@"
-            ALTER TABLE `{TokensManagerConfig.TableName}`
-            ADD COLUMN `uses_left` INT NULL DEFAULT NULL AFTER `token`;");
-    }
-
-    private static async Task EnsureIsUsedColumnAsync(MySqlConnection dbConnection)
-    {
-        var columnExists = await dbConnection.ExecuteScalarAsync<int>($@"
-            SELECT COUNT(*)
-            FROM INFORMATION_SCHEMA.COLUMNS
-            WHERE TABLE_SCHEMA = DATABASE()
-              AND TABLE_NAME = @TableName
-              AND COLUMN_NAME = 'is_used';", new { TokensManagerConfig.TableName });
-
-        if (columnExists > 0) return;
-
-        await dbConnection.ExecuteAsync($@"
-            ALTER TABLE `{TokensManagerConfig.TableName}`
-            ADD COLUMN `is_used` TINYINT(1) NOT NULL DEFAULT 0 AFTER `uses_left`;");
-    }
-
-    private static async Task MarkDepletedLimitedTokensAsUsedAsync(MySqlConnection dbConnection)
-    {
-        await dbConnection.ExecuteAsync($@"
-            UPDATE `{TokensManagerConfig.TableName}`
-            SET `is_used` = 1
-            WHERE `uses_left` IS NOT NULL
-              AND `uses_left` <= 0;");
-    }
-
-    #endregion
-
-    #region Cache / DB helpers
-
-    private Task<Dictionary<string, PlayerToken>> GetOrLoadTokensAsync(ulong steamId64)
+    private Task<Dictionary<string, PlayerTokenInfo>> GetOrLoadTokensAsync(ulong steamId64)
         => GetOrLoadTokensAsync(steamId64, false);
 
-    private async Task<Dictionary<string, PlayerToken>> GetOrLoadTokensAsync(ulong steamId64, bool playerLockAlreadyHeld)
+    private async Task<Dictionary<string, PlayerTokenInfo>> GetOrLoadTokensAsync(ulong steamId64, bool playerLockAlreadyHeld)
     {
         if (_tokensCache.TryGetValue(steamId64, out var cachedTokens)) return cachedTokens;
 
-        if (playerLockAlreadyHeld is true)
+        if (playerLockAlreadyHeld)
         {
             cachedTokens = await LoadTokensFromDatabaseAsync(steamId64);
             _tokensCache[steamId64] = cachedTokens;
@@ -924,20 +737,259 @@ internal sealed class TokensManager(
         }
     }
 
-    private async Task<Dictionary<string, PlayerToken>> LoadTokensFromDatabaseAsync(ulong steamId64)
+    private async Task<Dictionary<string, PlayerTokenInfo>> LoadTokensFromDatabaseAsync(ulong steamId64)
     {
         await using var dbConnection = CreateDbConnection();
         await dbConnection.OpenAsync();
 
-        var tokens = await dbConnection.QueryAsync<PlayerTokenRow>($@"
-            SELECT `token` AS Token, `uses_left` AS UsesLeft, `is_used` AS IsUsed
+        var rows = await dbConnection.QueryAsync<PlayerTokenRow>($@"
+            SELECT `steamid64` AS SteamId64,
+                   `token` AS Token,
+                   `active` AS Active,
+                   `remaining_uses` AS RemainingUses,
+                   `active_till` AS ActiveTillUtc,
+                   `inactive_reason` AS InactiveReason,
+                   `metadata_json` AS MetadataJson,
+                   `created_at` AS CreatedAtUtc,
+                   `updated_at` AS UpdatedAtUtc
             FROM `{TokensManagerConfig.TableName}`
             WHERE `steamid64` = @SteamId64;", new { SteamId64 = steamId64 });
 
-        return tokens.ToDictionary(
-            token => token.Token,
-            token => new PlayerToken(token.Token, token.UsesLeft, token.IsUsed),
-            TokenComparer);
+        return rows
+            .Select(ToTokenInfo)
+            .ToDictionary(token => token.Token, token => token, TokenComparer);
+    }
+
+    #endregion
+
+    #region Tables / migrations
+
+    private async Task SetupDatabaseTablesAsync()
+    {
+        await using var dbConnection = CreateDbConnection();
+        await dbConnection.OpenAsync();
+
+        await dbConnection.ExecuteAsync($@"
+            CREATE TABLE IF NOT EXISTS `{TokensManagerConfig.TableName}`
+            (
+                `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                `steamid64` BIGINT UNSIGNED NOT NULL,
+                `token` VARCHAR(128) NOT NULL,
+                `active` TINYINT(1) NOT NULL DEFAULT 1,
+                `remaining_uses` INT NULL DEFAULT NULL,
+                `active_till` DATETIME NULL DEFAULT NULL,
+                `inactive_reason` VARCHAR(64) NULL DEFAULT NULL,
+                `metadata_json` LONGTEXT NULL DEFAULT NULL,
+                `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+                PRIMARY KEY (`id`),
+                UNIQUE KEY `uq_{TokensManagerConfig.TableName}_steamid64_token` (`steamid64`, `token`),
+                KEY `idx_{TokensManagerConfig.TableName}_steamid64` (`steamid64`),
+                KEY `idx_{TokensManagerConfig.TableName}_token` (`token`),
+                KEY `idx_{TokensManagerConfig.TableName}_active` (`active`),
+                KEY `idx_{TokensManagerConfig.TableName}_active_till` (`active_till`)
+            );");
+
+        await EnsureColumnAsync(dbConnection, "active", "ADD COLUMN `active` TINYINT(1) NOT NULL DEFAULT 1 AFTER `token`");
+        await EnsureColumnAsync(dbConnection, "remaining_uses", "ADD COLUMN `remaining_uses` INT NULL DEFAULT NULL AFTER `active`");
+        await EnsureColumnAsync(dbConnection, "active_till", "ADD COLUMN `active_till` DATETIME NULL DEFAULT NULL AFTER `remaining_uses`");
+        await EnsureColumnAsync(dbConnection, "inactive_reason", "ADD COLUMN `inactive_reason` VARCHAR(64) NULL DEFAULT NULL AFTER `active_till`");
+        await EnsureColumnAsync(dbConnection, "metadata_json", "ADD COLUMN `metadata_json` LONGTEXT NULL DEFAULT NULL AFTER `inactive_reason`");
+
+        await BackfillFromLegacyColumnsAsync(dbConnection);
+    }
+
+    private static async Task EnsureColumnAsync(MySqlConnection dbConnection, string columnName, string alterSql)
+    {
+        var columnExists = await dbConnection.ExecuteScalarAsync<int>(@"
+            SELECT COUNT(*)
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = @TableName
+              AND COLUMN_NAME = @ColumnName;", new
+        {
+            TokensManagerConfig.TableName,
+            ColumnName = columnName
+        });
+
+        if (columnExists > 0) return;
+
+        await dbConnection.ExecuteAsync($@"
+            ALTER TABLE `{TokensManagerConfig.TableName}`
+            {alterSql};");
+    }
+
+    private static async Task BackfillFromLegacyColumnsAsync(MySqlConnection dbConnection)
+    {
+        var hasUsesLeft = await ColumnExistsAsync(dbConnection, "uses_left");
+        var hasIsUsed = await ColumnExistsAsync(dbConnection, "is_used");
+
+        if (hasUsesLeft)
+        {
+            await dbConnection.ExecuteAsync($@"
+                UPDATE `{TokensManagerConfig.TableName}`
+                SET `remaining_uses` = `uses_left`
+                WHERE `remaining_uses` IS NULL AND `uses_left` IS NOT NULL;");
+        }
+
+        if (hasIsUsed)
+        {
+            await dbConnection.ExecuteAsync($@"
+                UPDATE `{TokensManagerConfig.TableName}`
+                SET `active` = CASE WHEN `is_used` = 1 THEN 0 ELSE `active` END,
+                    `inactive_reason` = CASE WHEN `is_used` = 1 THEN @Consumed ELSE `inactive_reason` END
+                WHERE `is_used` = 1;", new { Consumed = TokenInactiveReason.Consumed.ToString() });
+        }
+
+        await dbConnection.ExecuteAsync($@"
+            UPDATE `{TokensManagerConfig.TableName}`
+            SET `active` = 0,
+                `inactive_reason` = @Consumed
+            WHERE `remaining_uses` IS NOT NULL AND `remaining_uses` <= 0;", new { Consumed = TokenInactiveReason.Consumed.ToString() });
+    }
+
+    private static async Task<bool> ColumnExistsAsync(MySqlConnection dbConnection, string columnName)
+    {
+        var columnExists = await dbConnection.ExecuteScalarAsync<int>(@"
+            SELECT COUNT(*)
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = @TableName
+              AND COLUMN_NAME = @ColumnName;", new
+        {
+            TokensManagerConfig.TableName,
+            ColumnName = columnName
+        });
+
+        return columnExists > 0;
+    }
+
+    #endregion
+
+    #region Helpers
+
+    private async Task<bool> UpdateTokenFieldsAsync(ulong steamId64, string token, object parameters, string setClause)
+    {
+        var playerLock = GetPlayerLock(steamId64);
+        await playerLock.WaitAsync();
+
+        try
+        {
+            await using var dbConnection = CreateDbConnection();
+            await dbConnection.OpenAsync();
+
+            var dynamicParameters = new DynamicParameters(parameters);
+            dynamicParameters.Add("SteamId64", steamId64);
+            dynamicParameters.Add("Token", token);
+
+            var affectedRows = await dbConnection.ExecuteAsync($@"
+                UPDATE `{TokensManagerConfig.TableName}`
+                SET {setClause}
+                WHERE `steamid64` = @SteamId64 AND `token` = @Token;", dynamicParameters);
+
+            ClearCachedTokens(steamId64);
+            return affectedRows > 0;
+        }
+        catch (Exception e)
+        {
+            logger.LogError(e, "Failed to update token {token} for {steamId64}.", token, steamId64);
+            ClearCachedTokens(steamId64);
+            return false;
+        }
+        finally
+        {
+            playerLock.Release();
+        }
+    }
+
+    private static bool TryCreateGrant(ulong steamId64, TokenGrant tokenGrant, out PlayerTokenInfo playerToken)
+    {
+        playerToken = null!;
+
+        if (TryNormalizeToken(tokenGrant.Token, out var normalizedToken) is not true
+            || IsValidRemainingUses(tokenGrant.RemainingUses) is not true
+            || IsValidActiveTill(tokenGrant.ActiveTillUtc) is not true)
+        {
+            return false;
+        }
+
+        var now = DateTime.UtcNow;
+        var active = tokenGrant.ActiveTillUtc is null || tokenGrant.ActiveTillUtc.Value > now;
+
+        playerToken = new PlayerTokenInfo(
+            steamId64,
+            normalizedToken,
+            active,
+            tokenGrant.RemainingUses,
+            tokenGrant.ActiveTillUtc,
+            active ? TokenInactiveReason.None : TokenInactiveReason.Expired,
+            tokenGrant.MetadataJson,
+            now,
+            now);
+
+        return true;
+    }
+
+    private static bool MatchesQuery(PlayerTokenInfo playerToken, TokenQuery query, IReadOnlyCollection<string> requestedTokens)
+    {
+        if (requestedTokens.Count > 0 && requestedTokens.Contains(playerToken.Token, TokenComparer) is not true) return false;
+        if (query.IncludeExpired is not true && playerToken.IsExpired) return false;
+        if (query.OnlyActive && playerToken.CanBeUsed is not true) return false;
+        if (query.IncludeInactive is not true && playerToken.Active is not true) return false;
+
+        return true;
+    }
+
+    private static bool HasEnoughUses(PlayerTokenInfo playerToken, int requiredUses)
+        => playerToken.CanBeUsed && requiredUses > 0 && (playerToken.RemainingUses is null || playerToken.RemainingUses >= requiredUses);
+
+    private static TokenConsumeResult ValidateSpend(PlayerTokenInfo playerToken, int uses)
+    {
+        if (uses <= 0) return TokenConsumeResult.InvalidRequest;
+        if (playerToken.ActiveTillUtc is not null && playerToken.ActiveTillUtc.Value <= DateTime.UtcNow) return TokenConsumeResult.Expired;
+        if (playerToken.Active is not true) return TokenConsumeResult.Inactive;
+        if (playerToken.RemainingUses is null) return TokenConsumeResult.Unlimited;
+        if (playerToken.RemainingUses < uses) return TokenConsumeResult.InsufficientUses;
+
+        return TokenConsumeResult.Consumed;
+    }
+
+    private static IReadOnlyCollection<TokenSpend> NormalizeSpends(IEnumerable<TokenSpend> spends)
+    {
+        return spends
+            .Where(spend => spend.Uses > 0 && TryNormalizeToken(spend.Token, out _))
+            .GroupBy(spend => NormalizeToken(spend.Token), TokenComparer)
+            .Select(group => new TokenSpend(group.Key, group.Sum(spend => spend.Uses)))
+            .ToArray();
+    }
+
+    private static object ToDbParams(PlayerTokenInfo playerToken)
+    {
+        return new
+        {
+            playerToken.SteamId64,
+            playerToken.Token,
+            playerToken.Active,
+            playerToken.RemainingUses,
+            playerToken.ActiveTillUtc,
+            InactiveReason = playerToken.InactiveReason is TokenInactiveReason.None ? null : playerToken.InactiveReason.ToString(),
+            playerToken.MetadataJson
+        };
+    }
+
+    private static PlayerTokenInfo ToTokenInfo(PlayerTokenRow row)
+    {
+        return new PlayerTokenInfo(
+            row.SteamId64,
+            row.Token,
+            row.Active,
+            row.RemainingUses,
+            row.ActiveTillUtc,
+            ParseInactiveReason(row.InactiveReason),
+            row.MetadataJson,
+            row.CreatedAtUtc,
+            row.UpdatedAtUtc);
     }
 
     private MySqlConnection CreateDbConnection()
@@ -965,24 +1017,34 @@ internal sealed class TokensManager(
 
         if (string.IsNullOrWhiteSpace(token) is true) return false;
 
-        normalizedToken = token.Trim();
-        return normalizedToken.Length > 0;
+        normalizedToken = NormalizeToken(token);
+        return normalizedToken.Length is > 0 and <= 128;
     }
+
+    private static string NormalizeToken(string token)
+        => token.Trim().ToLowerInvariant();
 
     private static IReadOnlyCollection<string> NormalizeTokens(IEnumerable<string> tokens)
     {
         return tokens
             .Where(token => TryNormalizeToken(token, out _))
-            .Select(token => token.Trim())
+            .Select(NormalizeToken)
             .Distinct(TokenComparer)
             .ToArray();
     }
 
-    private static bool IsValidUsesLeft(int? usesLeft)
-        => usesLeft is null or > 0;
+    private static bool IsValidRemainingUses(int? remainingUses)
+        => remainingUses is null or >= 0;
 
-    private static bool CanSpendUses(PlayerToken playerToken, int usesToSpend)
-        => playerToken.IsUsed is not true && usesToSpend > 0 && (playerToken.IsUnlimited || playerToken.UsesLeft >= usesToSpend);
+    private static bool IsValidActiveTill(DateTime? activeTillUtc)
+        => activeTillUtc is null || activeTillUtc.Value.Kind is DateTimeKind.Utc;
+
+    private static TokenInactiveReason ParseInactiveReason(string? inactiveReason)
+    {
+        return Enum.TryParse<TokenInactiveReason>(inactiveReason, true, out var parsedReason)
+            ? parsedReason
+            : TokenInactiveReason.None;
+    }
 
     #endregion
 
@@ -1015,16 +1077,17 @@ internal sealed class TokensManager(
 
     #endregion
 
-    private readonly record struct PlayerToken(string Token, int? UsesLeft, bool IsUsed)
-    {
-        public bool IsUnlimited => UsesLeft is null && IsUsed is not true;
-    }
-
     private sealed class PlayerTokenRow
     {
+        public ulong SteamId64 { get; init; }
         public string Token { get; init; } = string.Empty;
-        public int? UsesLeft { get; init; }
-        public bool IsUsed { get; init; }
+        public bool Active { get; init; }
+        public int? RemainingUses { get; init; }
+        public DateTime? ActiveTillUtc { get; init; }
+        public string? InactiveReason { get; init; }
+        public string? MetadataJson { get; init; }
+        public DateTime CreatedAtUtc { get; init; }
+        public DateTime UpdatedAtUtc { get; init; }
     }
 }
 
@@ -1032,5 +1095,5 @@ public sealed class TokensManagerConfig
 {
     public bool EnableTokensManager { get; init; } = true;
     public string TableName { get; init; } = "deathrun_player_tokens";
-    public string Spacer { get; init; } = "If EnableTokensManager is true, you have to configure the database.json details too.";
+    public string Spacer { get; init; } = "If EnableTokensManager is true, configure the database.json details too.";
 }
