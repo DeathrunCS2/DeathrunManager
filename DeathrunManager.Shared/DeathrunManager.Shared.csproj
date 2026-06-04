@@ -25,6 +25,10 @@
         </AssemblyAttribute>
     </ItemGroup>
     
+    <ItemGroup>
+      <Folder Include="Objects\Tokens\" />
+    </ItemGroup>
+    
     <Target Name="CopyCompiledOutputs" AfterTargets="Build">
         <ItemGroup>
             <CompiledFiles Include="$(TargetDir)*.dll" />

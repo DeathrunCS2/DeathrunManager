@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using DeathrunManager.Shared.Objects;
+using DeathrunManager.Shared.Objects.Tokens;
 
 namespace DeathrunManager.Shared.Managers;
 
@@ -73,111 +74,4 @@ public interface ITokensManager
 
     void ClearCachedTokens(ulong steamId64);
     void ClearCache();
-}
-
-public enum TokenGrantResult
-{
-    InvalidRequest,
-    SkippedInvalidSteamId,
-    Created,
-    Replaced,
-    Refreshed,
-    Failed
-}
-
-public enum TokenConsumeResult
-{
-    InvalidRequest,
-    SkippedInvalidSteamId,
-    Missing,
-    Inactive,
-    Expired,
-    InsufficientUses,
-    Consumed,
-    Unlimited
-}
-
-public enum TokenInactiveReason
-{
-    None,
-    Consumed,
-    Expired,
-    Revoked,
-    Replaced
-}
-
-public enum TokenMatchMode
-{
-    All,
-    Any
-}
-
-public sealed record TokenGrant(
-    string Token,
-    int? RemainingUses = null,
-    DateTime? ActiveTillUtc = null,
-    bool ReplaceExisting = true,
-    string? MetadataJson = null)
-{
-    public static TokenGrant Permanent(string token, string? metadataJson = null)
-        => new(token, null, null, true, metadataJson);
-
-    public static TokenGrant Limited(string token, int remainingUses, string? metadataJson = null)
-        => new(token, remainingUses, null, true, metadataJson);
-
-    public static TokenGrant Temporary(string token, DateTime activeTillUtc, string? metadataJson = null)
-        => new(token, null, activeTillUtc, true, metadataJson);
-
-    public static TokenGrant LimitedTemporary(string token, int remainingUses, DateTime activeTillUtc, string? metadataJson = null)
-        => new(token, remainingUses, activeTillUtc, true, metadataJson);
-}
-
-public sealed record TokenSpend(string Token, int Uses = 1);
-
-public sealed record TokenRequirement(
-    IEnumerable<string>? RequiredTokens = null,
-    IEnumerable<string>? ExcludedTokens = null,
-    TokenMatchMode RequiredMatchMode = TokenMatchMode.All,
-    int RequiredUses = 1)
-{
-    public static TokenRequirement RequireAll(params string[] tokens)
-        => new(tokens, null, TokenMatchMode.All);
-
-    public static TokenRequirement RequireAny(params string[] tokens)
-        => new(tokens, null, TokenMatchMode.Any);
-}
-
-public sealed record TokenQuery(
-    bool IncludeInactive = false,
-    bool OnlyActive = true,
-    bool IncludeExpired = false,
-    IEnumerable<string>? Tokens = null)
-{
-    public static TokenQuery ActiveOnly { get; } = new();
-    public static TokenQuery All { get; } = new(IncludeInactive: true, OnlyActive: false, IncludeExpired: true);
-}
-
-public sealed record PlayerTokenInfo(
-    ulong SteamId64,
-    string Token,
-    bool Active,
-    int? RemainingUses,
-    DateTime? ActiveTillUtc,
-    TokenInactiveReason InactiveReason,
-    string? MetadataJson,
-    DateTime CreatedAtUtc,
-    DateTime UpdatedAtUtc)
-{
-    public bool IsUnlimited => RemainingUses is null;
-    public bool IsLimitedUse => RemainingUses is not null;
-    public bool IsTemporary => ActiveTillUtc is not null;
-    public bool IsExpired => ActiveTillUtc is not null && ActiveTillUtc.Value <= DateTime.UtcNow;
-    public bool CanBeUsed => Active && !IsExpired && (RemainingUses is null or > 0);
-}
-
-public sealed record TokenConsumeBatchResult(
-    bool Success,
-    IReadOnlyDictionary<string, TokenConsumeResult> Results)
-{
-    public static TokenConsumeBatchResult Empty { get; } = new(false, new Dictionary<string, TokenConsumeResult>());
 }

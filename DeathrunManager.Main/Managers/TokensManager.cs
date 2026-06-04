@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Data;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -11,6 +10,7 @@ using Dapper;
 using DeathrunManager.Interfaces.Managers;
 using DeathrunManager.Shared.Managers;
 using DeathrunManager.Shared.Objects;
+using DeathrunManager.Shared.Objects.Tokens;
 using Microsoft.Extensions.Logging;
 using MySqlConnector;
 
