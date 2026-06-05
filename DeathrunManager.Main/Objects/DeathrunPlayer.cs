@@ -224,10 +224,10 @@ public class DeathrunPlayer : IDeathrunPlayer
             
             PrintToCenterHtml
             (
-                (_topRowCellOneHtml ?? "") 
-                + (_topRowCellTwoHtml ?? "") 
-                + (_topRowCellThreeHtml ?? "") 
-                + (_topRowCellFourHtml ?? "")                 
+                (_topRowCellOneHtml     ?? "") 
+                + (_topRowCellTwoHtml           ?? "") 
+                + (_topRowCellThreeHtml         ?? "") 
+                + (_topRowCellFourHtml          ?? "")                 
                 + (_middleRowHtml     is not null       ? "<br/>" + _middleRowHtml  + "<br/>" : "") 
                 + _bottomRowHtml        ?? ""
             );
@@ -259,7 +259,7 @@ public class DeathrunPlayer : IDeathrunPlayer
             PrintToCenterHtml
             (
                 $"<font class='fontSize-m stratum-font fontWeight-Bold' color='{(observedDeathrunPlayer?.Class is DPlayerClass.Contestant ? "#ADD8E6" : "#ffb09c")}'>"
-                + $"[{observedDeathrunPlayer?.Client.Name}]"
+                + $"[{observedDeathrunPlayer?.Client.Name}] "
                 + $"</font>"
                 + (_topRowCellOneHtml ?? "") 
                 + (_topRowCellTwoHtml ?? "") 
